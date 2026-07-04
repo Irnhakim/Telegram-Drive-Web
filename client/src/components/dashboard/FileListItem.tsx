@@ -4,12 +4,11 @@ import type { TelegramFile } from '../../types';
 
 interface FileListItemProps {
   file: TelegramFile;
-  folderId: string;
   onDownload: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
 }
 
-export function FileListItem({ file, folderId, onDownload, onContextMenu }: FileListItemProps) {
+export function FileListItem({ file, onDownload, onContextMenu }: FileListItemProps) {
   const formatDate = (dateStr: string) => {
     try {
       return new Date(dateStr).toLocaleDateString('en-US', {

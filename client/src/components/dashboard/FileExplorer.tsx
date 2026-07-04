@@ -21,7 +21,7 @@ interface FileExplorerProps {
 
 export function FileExplorer({
   files, loading, viewMode, currentFolderId, folders,
-  onUpload, onDelete, onRename, onRefresh,
+  onUpload, onDelete, onRename,
 }: FileExplorerProps) {
   const [dragOver, setDragOver] = useState(false);
   const [contextMenu, setContextMenu] = useState<{
@@ -195,7 +195,6 @@ export function FileExplorer({
               >
                 <FileListItem
                   file={file}
-                  folderId={currentFolderId}
                   onDownload={() => handleDownload(file)}
                   onContextMenu={(e) => handleContextMenu(e, file)}
                 />

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Download, Pencil, Trash2, Copy } from 'lucide-react';
+import { Download, Pencil, Trash2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import type { TelegramFile, TelegramFolder } from '../../types';
 

@@ -198,7 +198,7 @@ export function getStorageStats() {
     totalSize: totalRow[1] as number,
     totalFiles: totalRow[0] as number,
     byFolder: folderResult.length
-      ? folderResult[0].values.map((r) => ({
+      ? folderResult[0].values.map((r: any) => ({
           folderId: r[0] as string,
           folderName: r[1] as string,
           fileCount: r[2] as number,
@@ -206,7 +206,7 @@ export function getStorageStats() {
         }))
       : [],
     byMimeType: mimeResult.length
-      ? mimeResult[0].values.map((r) => ({
+      ? mimeResult[0].values.map((r: any) => ({
           mimeType: r[0] as string,
           fileCount: r[1] as number,
           totalSize: r[2] as number,

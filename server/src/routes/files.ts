@@ -41,7 +41,8 @@ async function resolveEntity(folderId: string): Promise<Api.TypeEntityLike | nul
   }
 
   try {
-    const entity = await client.getEntity(BigInt(folderId));
+    // gram.js uses big-integer package for entity BigInt matching, let's cast to any to bypass strict compiler match
+    const entity = await client.getEntity(BigInt(folderId) as any);
     return entity;
   } catch (e) {
     console.error('Failed to resolve entity:', folderId, e);

@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import {
   Search, LayoutGrid, List, Upload, RefreshCw, Menu,
-  ArrowUpDown, ArrowUp, ArrowDown, SortAsc,
+  ArrowUp, ArrowDown,
 } from 'lucide-react';
 import type { TelegramFolder, ViewMode, SortField, SortOrder } from '../../types';
 

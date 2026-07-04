@@ -1,4 +1,4 @@
-import { TelegramClient, Api } from 'telegram';
+import { TelegramClient, Api, helpers } from 'telegram';
 import { StringSession } from 'telegram/sessions/index.js';
 import fs from 'fs';
 import path from 'path';
@@ -128,9 +128,10 @@ export async function verify2FA(password: string): Promise<{ success: boolean }>
 
   if (!algo) throw new Error('No password algorithm found');
 
+  // Compute SRP password hash using the client.computePasswordSRP method, casting client to any
   const result = await client.invoke(
     new Api.auth.CheckPassword({
-      password: await client.computePasswordSRP(password, passwordInfo),
+      password: await (client as any).computePasswordSRP(passwordInfo, password)
     })
   );
 
@@ -250,7 +251,6 @@ export async function uploadFile(
   const result = await client.sendFile(entity, {
     file: filePath,
     caption: '',
-    fileName: fileName,
     forceDocument: true,
     workers: 4,
   });
@@ -354,7 +354,7 @@ export async function renameChannel(channelId: bigint, newTitle: string): Promis
   try {
     await client.invoke(
       new Api.channels.EditTitle({
-        channel: channelId,
+        channel: channelId as any,
         title: newTitle,
       })
     );
@@ -372,7 +372,7 @@ export async function deleteChannel(channelId: bigint): Promise<boolean> {
   try {
     await client.invoke(
       new Api.channels.DeleteChannel({
-        channel: channelId,
+        channel: channelId as any,
       })
     );
     return true;
