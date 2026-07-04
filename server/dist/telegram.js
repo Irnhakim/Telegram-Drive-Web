@@ -1,4 +1,4 @@
-import { TelegramClient, Api, helpers } from 'telegram';
+import { TelegramClient, Api } from 'telegram';
 import { StringSession } from 'telegram/sessions/index.js';
 import fs from 'fs';
 import path from 'path';
@@ -103,9 +103,9 @@ export async function verify2FA(password) {
     const algo = passwordInfo.currentAlgo;
     if (!algo)
         throw new Error('No password algorithm found');
-    // Compute SRP password hash using the helpers.computePasswordSRP method
+    // Compute SRP password hash using the client.computePasswordSRP method, casting client to any
     const result = await client.invoke(new Api.auth.CheckPassword({
-        password: await helpers.computePasswordSRP(passwordInfo, password)
+        password: await client.computePasswordSRP(passwordInfo, password)
     }));
     if (result) {
         const sessionStr = client.session.save();
