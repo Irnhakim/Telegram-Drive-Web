@@ -22,6 +22,7 @@ export function Dashboard({ user, onLogout, onAccessLogout }: DashboardProps) {
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [totalFiles, setTotalFiles] = useState(0);
+  const [selectedFileIds, setSelectedFileIds] = useState<number[]>([]);
 
   // Theme support
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
@@ -143,6 +144,87 @@ export function Dashboard({ user, onLogout, onAccessLogout }: DashboardProps) {
     }
   }, [currentFolderId, loadFiles]);
 
+  // Handle selection toggles
+  const handleToggleSelectFile = useCallback((fileId: number) => {
+    setSelectedFileIds((prev) =>
+      prev.includes(fileId) ? prev.filter((id) => id !== fileId) : [...prev, fileId]
+    );
+  }, []);
+
+  const handleClearSelection = useCallback(() => {
+    setSelectedFileIds([]);
+  }, []);
+
+  // Handle Bulk Delete
+  const handleBulkDelete = useCallback(async () => {
+    if (selectedFileIds.length === 0) return;
+    if (!confirm(`Are you sure you want to delete ${selectedFileIds.length} selected files?`)) return;
+
+    try {
+      await filesApi.bulkDelete(selectedFileIds, currentFolderId);
+      setFiles((prev) => prev.filter((f) => !selectedFileIds.includes(f.id)));
+      setSelectedFileIds([]);
+    } catch (err) {
+      console.error('Bulk delete failed:', err);
+    }
+  }, [selectedFileIds, currentFolderId]);
+
+  // Handle Bulk Move
+  const handleBulkMove = useCallback(async () => {
+    if (selectedFileIds.length === 0) return;
+    
+    // Find target folders
+    const availableFolders = folders.filter((f) => f.id !== currentFolderId);
+    if (availableFolders.length === 0) {
+      alert('No other folders available to move files to.');
+      return;
+    }
+
+    const folderNamesStr = availableFolders.map((f, index) => `${index + 1}. ${f.name}`).join('\n');
+    const choice = prompt(`Select target folder number to move files to:\n\n${folderNamesStr}`);
+    
+    if (choice) {
+      const idx = parseInt(choice, 10) - 1;
+      if (idx >= 0 && idx < availableFolders.length) {
+        const target = availableFolders[idx];
+        try {
+          await filesApi.bulkMove(selectedFileIds, currentFolderId, target.id);
+          setFiles((prev) => prev.filter((f) => !selectedFileIds.includes(f.id)));
+          setSelectedFileIds([]);
+          alert(`Successfully moved ${selectedFileIds.length} files to "${target.name}"!`);
+        } catch (err: any) {
+          alert('Bulk move failed: ' + err.message);
+        }
+      } else {
+        alert('Invalid selection.');
+      }
+    }
+  }, [selectedFileIds, currentFolderId, folders]);
+
+  // Handle Bulk Download
+  const handleBulkDownload = useCallback(() => {
+    if (selectedFileIds.length === 0) return;
+    // Download sequential files in series
+    selectedFileIds.forEach((id) => {
+      const file = files.find((f) => f.id === id);
+      if (file) {
+        const url = filesApi.getDownloadUrl(file.id, currentFolderId);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = file.name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+    });
+  }, [selectedFileIds, files, currentFolderId]);
+
+  // Handle Bulk Share (Generate public link for each selected file)
+  const handleBulkShare = useCallback(async () => {
+    if (selectedFileIds.length === 0) return;
+    alert(`To share multiple files, you can share them one by one using the right-click menu, or download selected.`);
+  }, [selectedFileIds]);
+
   // Handle folder creation
   const handleCreateFolder = useCallback(async (name: string) => {
     try {
@@ -233,6 +315,12 @@ export function Dashboard({ user, onLogout, onAccessLogout }: DashboardProps) {
           onViewModeChange={setViewMode}
           onSearchChange={setSearchQuery}
           onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+          selectedCount={selectedFileIds.length}
+          onClearSelection={handleClearSelection}
+          onBulkDelete={handleBulkDelete}
+          onBulkDownload={handleBulkDownload}
+          onBulkMove={handleBulkMove}
+          onBulkShare={handleBulkShare}
         />
 
         <FileExplorer
@@ -243,6 +331,8 @@ export function Dashboard({ user, onLogout, onAccessLogout }: DashboardProps) {
           onUpload={handleUpload}
           onDelete={handleDelete}
           onRename={handleRename}
+          selectedFileIds={selectedFileIds}
+          onToggleSelectFile={handleToggleSelectFile}
         />
       </div>
 

@@ -16,11 +16,14 @@ interface FileExplorerProps {
   onUpload: (files: FileList) => void;
   onDelete: (fileId: number) => void;
   onRename: (fileId: number, newName: string) => void;
+  selectedFileIds: number[];
+  onToggleSelectFile: (fileId: number) => void;
 }
 
 export function FileExplorer({
   files, viewMode, currentFolderId, folders,
   onUpload, onDelete, onRename,
+  selectedFileIds, onToggleSelectFile,
 }: FileExplorerProps) {
   const [dragOver, setDragOver] = useState(false);
   const [contextMenu, setContextMenu] = useState<{
@@ -239,6 +242,11 @@ export function FileExplorer({
                 folderId={currentFolderId}
                 onDownload={() => handleDownload(file)}
                 onContextMenu={(e) => handleContextMenu(e, file)}
+                isSelected={selectedFileIds.includes(file.id)}
+                onToggleSelect={(e) => {
+                  e.stopPropagation();
+                  onToggleSelectFile(file.id);
+                }}
               />
             </motion.div>
           ))}
@@ -304,6 +312,11 @@ export function FileExplorer({
                 file={file}
                 onDownload={() => handleDownload(file)}
                 onContextMenu={(e) => handleContextMenu(e, file)}
+                isSelected={selectedFileIds.includes(file.id)}
+                onToggleSelect={(e) => {
+                  e.stopPropagation();
+                  onToggleSelectFile(file.id);
+                }}
               />
             </motion.div>
           ))}

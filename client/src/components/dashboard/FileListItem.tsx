@@ -6,9 +6,11 @@ interface FileListItemProps {
   file: TelegramFile;
   onDownload: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
+  isSelected: boolean;
+  onToggleSelect: (e: React.MouseEvent) => void;
 }
 
-export function FileListItem({ file, onDownload, onContextMenu }: FileListItemProps) {
+export function FileListItem({ file, onDownload, onContextMenu, isSelected, onToggleSelect }: FileListItemProps) {
   const formatDate = (dateStr: string) => {
     try {
       return new Date(dateStr).toLocaleDateString('en-US', {
@@ -21,10 +23,33 @@ export function FileListItem({ file, onDownload, onContextMenu }: FileListItemPr
 
   return (
     <div
-      className="file-list-item"
+      className={`file-list-item ${isSelected ? 'selected' : ''}`}
       onContextMenu={onContextMenu}
       onDoubleClick={onDownload}
+      style={{
+        background: isSelected ? 'rgba(245,158,11,0.05)' : undefined,
+        borderLeft: isSelected ? '3px solid var(--accent-primary)' : undefined,
+      }}
     >
+      {/* Circle selector dot */}
+      <div
+        onClick={onToggleSelect}
+        style={{
+          width: '16px', height: '16px', borderRadius: '50%',
+          border: isSelected ? '2px solid var(--accent-primary)' : '1px solid rgba(255,255,255,0.2)',
+          background: isSelected ? 'rgba(0,0,0,0.4)' : 'transparent',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'pointer', marginRight: '10px',
+        }}
+      >
+        {isSelected && (
+          <div style={{
+            width: '6px', height: '6px', borderRadius: '50%',
+            background: 'var(--accent-primary)'
+          }} />
+        )}
+      </div>
+
       <FileTypeIcon mimeType={file.mimeType} category={file.category} size={18} />
 
       <div style={{

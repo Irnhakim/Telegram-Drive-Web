@@ -8,18 +8,43 @@ interface FileCardProps {
   folderId: string;
   onDownload: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
+  isSelected: boolean;
+  onToggleSelect: (e: React.MouseEvent) => void;
 }
 
-export function FileCard({ file, folderId, onDownload, onContextMenu }: FileCardProps) {
+export function FileCard({ file, folderId, onDownload, onContextMenu, isSelected, onToggleSelect }: FileCardProps) {
   const showThumb = file.hasThumb && (file.category === 'image' || file.category === 'video');
   const thumbUrl = showThumb ? filesApi.getThumbnailUrl(file.id, folderId) : null;
 
   return (
     <div
-      className="file-card"
+      className={`file-card ${isSelected ? 'selected' : ''}`}
       onContextMenu={onContextMenu}
       onDoubleClick={onDownload}
+      style={{
+        border: isSelected ? '2px solid var(--accent-primary)' : undefined,
+        position: 'relative',
+      }}
     >
+      {/* Circle selector dot */}
+      <div
+        onClick={onToggleSelect}
+        style={{
+          position: 'absolute', top: '10px', left: '10px',
+          width: '18px', height: '18px', borderRadius: '50%',
+          border: isSelected ? '2px solid var(--accent-primary)' : '1px solid rgba(255,255,255,0.2)',
+          background: isSelected ? 'rgba(0,0,0,0.4)' : 'transparent',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'pointer', zIndex: 5,
+        }}
+      >
+        {isSelected && (
+          <div style={{
+            width: '8px', height: '8px', borderRadius: '50%',
+            background: 'var(--accent-primary)'
+          }} />
+        )}
+      </div>
       {/* Thumbnail or icon */}
       {thumbUrl ? (
         <img
