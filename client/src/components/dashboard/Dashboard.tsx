@@ -23,6 +23,11 @@ export function Dashboard({ user, onLogout, onAccessLogout }: DashboardProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [totalFiles, setTotalFiles] = useState(0);
   const [selectedFileIds, setSelectedFileIds] = useState<number[]>([]);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  const handleToggleSidebar = useCallback(() => {
+    setSidebarCollapsed((prev) => !prev);
+  }, []);
 
   // Theme support
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
@@ -201,23 +206,44 @@ export function Dashboard({ user, onLogout, onAccessLogout }: DashboardProps) {
     }
   }, [selectedFileIds, currentFolderId, folders]);
 
-  // Handle Bulk Download
-  const handleBulkDownload = useCallback(() => {
+  // Handle Bulk Download (Single ZIP stream)
+  const handleBulkDownload = useCallback(async () => {
     if (selectedFileIds.length === 0) return;
-    // Download sequential files in series
-    selectedFileIds.forEach((id) => {
-      const file = files.find((f) => f.id === id);
-      if (file) {
-        const url = filesApi.getDownloadUrl(file.id, currentFolderId);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = file.name;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+
+    try {
+      const token = localStorage.getItem('access_token') || '';
+      const response = await fetch(filesApi.bulkDownloadUrl(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Access-Token': token
+        },
+        body: JSON.stringify({
+          file_ids: selectedFileIds,
+          folder_id: currentFolderId
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate ZIP download');
       }
-    });
-  }, [selectedFileIds, files, currentFolderId]);
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `telegram-drive-selected-${Date.now()}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      
+      // Clear selection after successful download
+      setSelectedFileIds([]);
+    } catch (err: any) {
+      alert('Bulk download failed: ' + err.message);
+    }
+  }, [selectedFileIds, currentFolderId]);
 
   // Handle Bulk Share (Generate public link for each selected file)
   const handleBulkShare = useCallback(async () => {
@@ -280,7 +306,7 @@ export function Dashboard({ user, onLogout, onAccessLogout }: DashboardProps) {
   const currentFolder = folders.find((f) => f.id === currentFolderId);
 
   return (
-    <div className="app-layout animate-fade-in">
+    <div className={`app-layout animate-fade-in ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div
@@ -304,6 +330,7 @@ export function Dashboard({ user, onLogout, onAccessLogout }: DashboardProps) {
         onToggleTheme={handleToggleTheme}
         onLogout={onLogout}
         onAccessLogout={onAccessLogout}
+        onToggleCollapse={handleToggleSidebar}
       />
 
       <div className="main-content">
@@ -314,13 +341,14 @@ export function Dashboard({ user, onLogout, onAccessLogout }: DashboardProps) {
           totalFiles={totalFiles}
           onViewModeChange={setViewMode}
           onSearchChange={setSearchQuery}
-          onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+          onToggleSidebar={handleToggleSidebar}
           selectedCount={selectedFileIds.length}
           onClearSelection={handleClearSelection}
           onBulkDelete={handleBulkDelete}
           onBulkDownload={handleBulkDownload}
           onBulkMove={handleBulkMove}
           onBulkShare={handleBulkShare}
+          sidebarCollapsed={sidebarCollapsed}
         />
 
         <FileExplorer

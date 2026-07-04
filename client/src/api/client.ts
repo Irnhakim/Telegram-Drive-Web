@@ -255,6 +255,8 @@ export const filesApi = {
         payload: { folder_id: targetFolderId },
       }),
     }),
+
+  bulkDownloadUrl: () => `${API_BASE}/api/files/bulk-download`,
 };
 
 // ── Storage ───────────────────────────────────────────

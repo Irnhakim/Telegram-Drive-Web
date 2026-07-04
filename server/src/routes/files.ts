@@ -505,3 +505,74 @@ filesRouter.post('/bulk', async (req, res) => {
     });
   }
 });
+
+// @ts-ignore
+import archiver from 'archiver';
+
+// Bulk download ZIP stream (PUBLIC/AUTHENTICATED)
+filesRouter.post('/bulk-download', async (req, res) => {
+  try {
+    const { file_ids, folder_id } = req.body;
+    const folderId = folder_id || 'me';
+
+    if (!file_ids || !Array.isArray(file_ids) || file_ids.length === 0) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'file_ids array is required' } });
+      return;
+    }
+
+    const entity = await resolveEntity(folderId);
+    if (!entity) {
+      res.status(404).json({ error: { code: 'FOLDER_NOT_FOUND', message: 'Folder not found' } });
+      return;
+    }
+
+    const client = getTelegramClient();
+    if (!client) {
+      res.status(500).json({ error: { code: 'NOT_CONNECTED', message: 'Not connected' } });
+      return;
+    }
+
+    // Set response headers for zip file stream
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="telegram-drive-download-${Date.now()}.zip"`);
+
+    const archive = (archiver as any)('zip', { zlib: { level: 9 } });
+
+    // Handle errors from archive packing
+    archive.on('error', (err: any) => {
+      console.error('ZIP packing error:', err);
+      // If headers are already sent, we cannot send custom json error
+      if (!res.headersSent) {
+        res.status(500).send('Failed to package files');
+      }
+    });
+
+    archive.pipe(res);
+
+    // Download files and append them to zip archive
+    for (const fid of file_ids) {
+      try {
+        const msgs = await client.getMessages(entity, { ids: [fid] });
+        if (msgs && msgs.length > 0 && msgs[0]) {
+          const msg = msgs[0] as Api.Message;
+          const info = extractFileInfo(msg, folderId);
+          const buffer = await downloadFileToBuffer(msg);
+          
+          if (buffer) {
+            archive.append(buffer, { name: info.name });
+          }
+        }
+      } catch (e) {
+        console.error('Error adding file to zip:', fid, e);
+        // Continue downloading remaining files even if one fails
+      }
+    }
+
+    await archive.finalize();
+  } catch (err: any) {
+    console.error('Bulk ZIP download error:', err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: { code: 'ZIP_FAILED', message: err.message } });
+    }
+  }
+});

@@ -8,6 +8,7 @@ export declare function getCachedFolders(): Array<{
     id: string;
     name: string;
     is_saved_messages: number;
+    group_id: string | null;
 }>;
 export declare function cacheFiles(folderId: string, files: Array<{
     messageId: number;
@@ -65,3 +66,11 @@ export declare function getShareLink(id: string): {
     expiresAt: number | null;
 } | null;
 export declare function deleteShareLink(id: string): void;
+export declare function createGroup(id: string, name: string, color: string): void;
+export declare function getGroups(): {
+    id: string;
+    name: string;
+    color: string;
+}[];
+export declare function deleteGroup(id: string): void;
+export declare function updateFolderGroup(folderId: string, groupId: string | null): void;

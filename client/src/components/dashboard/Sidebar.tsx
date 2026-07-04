@@ -19,6 +19,7 @@ interface SidebarProps {
   onDeleteFolder: (id: string) => void;
   onUpdateFolderPublicity: (id: string, isPublic: boolean, username?: string) => void;
   onLogout: () => void;
+  onToggleCollapse: () => void;
   user?: any;
   theme?: string;
   onToggleTheme?: () => void;
@@ -45,7 +46,7 @@ const THEME_COLORS = [
 export function Sidebar({
   folders, currentFolderId, loading, open,
   onSelectFolder, onCreateFolder, onRenameFolder, onDeleteFolder, onUpdateFolderPublicity,
-  onLogout,
+  onLogout, onToggleCollapse,
 }: SidebarProps) {
   const [showCreate, setShowCreate] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
@@ -253,7 +254,7 @@ export function Sidebar({
             Telegram Drive
           </h3>
         </div>
-        <button className="btn btn-ghost btn-icon" style={{ padding: '4px', color: 'var(--text-muted)' }}>
+        <button onClick={onToggleCollapse} className="btn btn-ghost btn-icon" style={{ padding: '4px', color: 'var(--text-muted)' }}>
           <ChevronLeft size={16} />
         </button>
       </div>

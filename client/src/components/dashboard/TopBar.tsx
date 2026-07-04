@@ -1,4 +1,4 @@
-import { Search, LayoutGrid, List, Settings, Database, Globe, X } from 'lucide-react';
+import { Search, LayoutGrid, List, X, ChevronRight } from 'lucide-react';
 import type { TelegramFolder, ViewMode } from '../../types';
 
 interface TopBarProps {
@@ -15,12 +15,14 @@ interface TopBarProps {
   onBulkDownload: () => void;
   onBulkMove: () => void;
   onBulkShare: () => void;
+  sidebarCollapsed: boolean;
 }
 
 export function TopBar({
   currentFolder, viewMode, searchQuery,
-  onViewModeChange, onSearchChange,
+  onViewModeChange, onSearchChange, onToggleSidebar,
   selectedCount, onClearSelection, onBulkDelete, onBulkDownload, onBulkMove, onBulkShare,
+  sidebarCollapsed,
 }: TopBarProps) {
 
   return (
@@ -30,8 +32,22 @@ export function TopBar({
       borderBottom: '1px solid var(--border-subtle)', height: 'var(--topbar-height)'
     }}>
       
-      {/* Breadcrumb (Left corner) */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.875rem', fontWeight: 500 }}>
+      {/* Breadcrumb & Uncollapse Trigger (Left corner) */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.875rem', fontWeight: 500 }}>
+        {sidebarCollapsed && (
+          <button
+            onClick={onToggleSidebar}
+            className="btn btn-ghost btn-icon"
+            style={{
+              padding: '4px', color: 'var(--text-primary)',
+              background: 'rgba(255,255,255,0.05)', borderRadius: '4px',
+              cursor: 'pointer', border: 'none', display: 'flex', alignItems: 'center'
+            }}
+            title="Show Sidebar"
+          >
+            <ChevronRight size={16} />
+          </button>
+        )}
         <span style={{ color: 'var(--text-muted)' }}>Start</span>
         <span style={{ color: 'var(--text-muted)' }}>/</span>
         <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{currentFolder?.name || 'Loading...'}</span>
@@ -116,16 +132,6 @@ export function TopBar({
       {/* Right Utilites Icons */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '14px', color: 'var(--text-muted)' }}>
         
-        {/* Storage DB Stats Icon */}
-        <button className="btn btn-ghost btn-icon" style={{ padding: '6px' }} title="Storage statistics">
-          <Database size={16} />
-        </button>
-
-        {/* Global Public shares Icon */}
-        <button className="btn btn-ghost btn-icon" style={{ padding: '6px' }} title="Public Shares">
-          <Globe size={16} />
-        </button>
-
         {/* Grid/List View switcher */}
         <div style={{ display: 'flex', gap: '2px', background: 'rgba(255,255,255,0.03)', borderRadius: '6px', padding: '2px' }}>
           <button
@@ -149,11 +155,6 @@ export function TopBar({
             <List size={15} />
           </button>
         </div>
-
-        {/* App Settings Icon */}
-        <button className="btn btn-ghost btn-icon" style={{ padding: '6px' }} title="Settings">
-          <Settings size={16} />
-        </button>
       </div>
 
     </div>
