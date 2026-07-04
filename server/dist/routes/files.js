@@ -444,8 +444,7 @@ filesRouter.post('/bulk', async (req, res) => {
         });
     }
 });
-// @ts-ignore
-import archiver from 'archiver';
+import * as archiverModule from 'archiver';
 // Bulk download ZIP stream (PUBLIC/AUTHENTICATED)
 filesRouter.post('/bulk-download', async (req, res) => {
     try {
@@ -468,6 +467,7 @@ filesRouter.post('/bulk-download', async (req, res) => {
         // Set response headers for zip file stream
         res.setHeader('Content-Type', 'application/zip');
         res.setHeader('Content-Disposition', `attachment; filename="telegram-drive-download-${Date.now()}.zip"`);
+        const archiver = (archiverModule.default || archiverModule);
         const archive = archiver('zip', { zlib: { level: 9 } });
         // Handle errors from archive packing
         archive.on('error', (err) => {
