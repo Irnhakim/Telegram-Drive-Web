@@ -1,0 +1,25 @@
+services:
+  telegram-drive:
+    build: .
+    container_name: telegram-drive-web
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      - TELEGRAM_API_ID=${TELEGRAM_API_ID}
+      - TELEGRAM_API_HASH=${TELEGRAM_API_HASH}
+      - ACCESS_PASSWORD=${ACCESS_PASSWORD}
+      - PORT=3001
+      - NODE_ENV=production
+    volumes:
+      - telegram-drive-data:/app/data
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  telegram-drive-data:
+    driver: local
