@@ -81,7 +81,7 @@ export type ViewMode = 'grid' | 'list';
 export type SortField = 'name' | 'size' | 'created_at';
 export type SortOrder = 'asc' | 'desc';
 
-export type AuthStep = 'phone' | 'code' | '2fa' | 'loading';
+export type AuthStep = 'method-select' | 'phone' | 'code' | 'qr' | '2fa' | 'loading';
 
 export interface UploadItem {
   id: string;

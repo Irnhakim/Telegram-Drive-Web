@@ -7,9 +7,53 @@ import {
   checkAuth,
   logout,
   getMe,
+  sendQRToken,
+  checkQRStatus,
 } from '../telegram.js';
 
 export const authRouter = Router();
+
+// Start QR Code Auth Session
+authRouter.post('/qr/start', async (req, res) => {
+  try {
+    const { apiId, apiHash } = req.body;
+    const result = await sendQRToken(apiId ? parseInt(apiId, 10) : undefined, apiHash);
+    res.json(result);
+  } catch (err: any) {
+    console.error('QR Start error:', err);
+    res.status(500).json({
+      error: { code: 'QR_START_FAILED', message: err.message || 'Failed to start QR session' },
+    });
+  }
+});
+
+// Poll QR Auth Status
+authRouter.get('/qr/status', async (_req, res) => {
+  try {
+    const statusResult = await checkQRStatus();
+    if (statusResult.status === 'success' && statusResult.user) {
+      const me = await getMe();
+      res.json({
+        status: 'success',
+        user: me
+          ? {
+              id: me.id?.toString(),
+              firstName: me.firstName,
+              lastName: me.lastName || '',
+              username: me.username || '',
+              phone: me.phone || '',
+            }
+          : null,
+      });
+    } else {
+      res.json(statusResult);
+    }
+  } catch (err: any) {
+    res.status(500).json({
+      error: { code: 'QR_STATUS_FAILED', message: err.message },
+    });
+  }
+});
 
 // Check authentication status
 authRouter.get('/status', async (_req, res) => {
@@ -40,15 +84,15 @@ authRouter.get('/status', async (_req, res) => {
 // Send verification code
 authRouter.post('/send-code', async (req, res) => {
   try {
-    const { phoneNumber } = req.body;
+    const { phoneNumber, apiId, apiHash } = req.body;
     if (!phoneNumber) {
       res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Phone number is required' } });
       return;
     }
 
-    // Initialize client if not already
-    await initClient();
-    const result = await sendCode(phoneNumber);
+    // Initialize client dynamically
+    await initClient(apiId ? parseInt(apiId, 10) : undefined, apiHash);
+    const result = await sendCode(phoneNumber, apiId ? parseInt(apiId, 10) : undefined, apiHash);
 
     res.json({
       success: true,

@@ -121,8 +121,12 @@ app.use('/api/storage', requireAccess, requireTelegramAuth, storageRouter);
 // Serve static frontend in production
 const clientDistPath = path.resolve(__dirname, '../../client/dist');
 app.use(express.static(clientDistPath));
-app.get('*', (_req, res) => {
-  res.sendFile(path.join(clientDistPath, 'index.html'));
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api')) {
+    next();
+  } else {
+    res.sendFile(path.join(clientDistPath, 'index.html'));
+  }
 });
 
 // Initialize

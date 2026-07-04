@@ -69,10 +69,10 @@ export const accessApi = {
 export const authApi = {
   status: () => request<{ authenticated: boolean; user: any }>('/api/auth/status'),
 
-  sendCode: (phoneNumber: string) =>
+  sendCode: (phoneNumber: string, apiId?: string, apiHash?: string) =>
     request<{ success: boolean; phoneCodeHash: string }>('/api/auth/send-code', {
       method: 'POST',
-      body: JSON.stringify({ phoneNumber }),
+      body: JSON.stringify({ phoneNumber, apiId, apiHash }),
     }),
 
   verifyCode: (phoneNumber: string, code: string, phoneCodeHash: string) =>
@@ -80,6 +80,15 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify({ phoneNumber, code, phoneCodeHash }),
     }),
+
+  startQR: (apiId?: string, apiHash?: string) =>
+    request<{ tokenUrl: string; expires: number }>('/api/auth/qr/start', {
+      method: 'POST',
+      body: JSON.stringify({ apiId, apiHash }),
+    }),
+
+  pollQRStatus: () =>
+    request<{ status: string; user?: any; error?: string }>('/api/auth/qr/status'),
 
   verify2FA: (password: string) =>
     request<{ success: boolean; user?: any }>('/api/auth/verify-2fa', {
@@ -111,6 +120,15 @@ export const foldersApi = {
     request<{ success: boolean }>(`/api/folders/${id}`, {
       method: 'DELETE',
     }),
+
+  updatePublicity: (id: string, isPublic: boolean, username?: string) =>
+    request<{ success: boolean }>(`/api/folders/${id}/publicity`, {
+      method: 'PUT',
+      body: JSON.stringify({ isPublic, username }),
+    }),
+
+  getInviteLink: (id: string) =>
+    request<{ inviteLink: string }>(`/api/folders/${id}/invite-link`),
 };
 
 // ── Files ─────────────────────────────────────────────
