@@ -1,4 +1,4 @@
-import { TelegramClient, Api, helpers } from 'telegram';
+import { TelegramClient, Api } from 'telegram';
 import { StringSession } from 'telegram/sessions/index.js';
 import fs from 'fs';
 import path from 'path';
