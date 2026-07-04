@@ -4,6 +4,7 @@ import { Upload, CloudOff } from 'lucide-react';
 import { FileCard } from './FileCard';
 import { FileListItem } from './FileListItem';
 import { ContextMenu } from './ContextMenu';
+import { ShareModal } from './ShareModal';
 import { filesApi } from '../../api/client';
 import type { TelegramFile, TelegramFolder, ViewMode } from '../../types';
 
@@ -27,6 +28,7 @@ export function FileExplorer({
   const [contextMenu, setContextMenu] = useState<{
     x: number; y: number; file: TelegramFile;
   } | null>(null);
+  const [shareFile, setShareFile] = useState<TelegramFile | null>(null);
   const dropRef = useRef<HTMLDivElement>(null);
 
   // Drag & Drop
@@ -216,6 +218,16 @@ export function FileExplorer({
           onDownload={() => { handleDownload(contextMenu.file); setContextMenu(null); }}
           onDelete={() => { onDelete(contextMenu.file.id); setContextMenu(null); }}
           onRename={() => { handleRenamePrompt(contextMenu.file); setContextMenu(null); }}
+          onShare={() => { setShareFile(contextMenu.file); setContextMenu(null); }}
+        />
+      )}
+
+      {/* Share Modal */}
+      {shareFile && (
+        <ShareModal
+          file={shareFile}
+          folderId={currentFolderId}
+          onClose={() => setShareFile(null)}
         />
       )}
     </div>

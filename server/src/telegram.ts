@@ -99,11 +99,11 @@ export async function sendQRToken(apiIdInput?: number, apiHashInput?: string): P
   // Clean disconnect if already logging in
   qrLoginSession = null;
   
-  const qr = await client!.signIn({
+  const qr = await (client as any).signIn({
     phoneNumber: async () => "",
     phoneCode: async () => "",
     password: async () => "",
-    qrCode: async (token) => {
+    qrCode: async (token: any) => {
       qrLoginSession = {
         tokenUrl: `tg://login?token=${token.token.toString("base64url")}`,
         expires: Date.now() + (token.expires * 1000),
@@ -111,7 +111,7 @@ export async function sendQRToken(apiIdInput?: number, apiHashInput?: string): P
         user: null,
       };
     },
-    onError: (err) => {
+    onError: (err: any) => {
       if (qrLoginSession) {
         qrLoginSession.status = "error";
         qrLoginSession.error = err.message;

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getSavedMessages, getUserChannels, createChannel, renameChannel, deleteChannel, } from '../telegram.js';
+import { getSavedMessages, getUserChannels, createChannel, renameChannel, deleteChannel, updateChannelPublicity, getChannelInviteLink, } from '../telegram.js';
 import { cacheFolders } from '../db.js';
 export const foldersRouter = Router();
 // List all folders (Saved Messages + Channels)
@@ -128,6 +128,47 @@ foldersRouter.delete('/:id', async (req, res) => {
         res.status(500).json({
             error: { code: 'DELETE_FAILED', message: err.message },
         });
+    }
+});
+// Update folder publicity (Make Public/Private)
+foldersRouter.put('/:id/publicity', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { isPublic, username } = req.body;
+        if (id === 'me') {
+            res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Cannot modify Saved Messages publicity' } });
+            return;
+        }
+        const success = await updateChannelPublicity(BigInt(id), isPublic, username);
+        if (!success) {
+            res.status(500).json({ error: { code: 'PUBLICITY_UPDATE_FAILED', message: 'Failed to update folder publicity' } });
+            return;
+        }
+        res.json({ success: true });
+    }
+    catch (err) {
+        console.error('Publicity update error:', err);
+        res.status(500).json({ error: { code: 'PUBLICITY_UPDATE_FAILED', message: err.message } });
+    }
+});
+// Get folder invite link
+foldersRouter.get('/:id/invite-link', async (req, res) => {
+    try {
+        const { id } = req.params;
+        if (id === 'me') {
+            res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Saved Messages does not have an invite link' } });
+            return;
+        }
+        const inviteLink = await getChannelInviteLink(BigInt(id));
+        if (!inviteLink) {
+            res.status(500).json({ error: { code: 'INVITE_LINK_FAILED', message: 'Failed to retrieve folder invite link' } });
+            return;
+        }
+        res.json({ inviteLink });
+    }
+    catch (err) {
+        console.error('Invite link error:', err);
+        res.status(500).json({ error: { code: 'INVITE_LINK_FAILED', message: err.message } });
     }
 });
 //# sourceMappingURL=folders.js.map

@@ -44,3 +44,24 @@ export declare function getStorageStats(): {
         totalSize: number;
     }[];
 };
+export declare function createShareLink(params: {
+    id: string;
+    messageId: number;
+    folderId: string;
+    fileName: string;
+    fileSize: number;
+    mimeType: string;
+    password?: string;
+    expiresAt?: number;
+}): void;
+export declare function getShareLink(id: string): {
+    id: string;
+    messageId: number;
+    folderId: string;
+    fileName: string;
+    fileSize: number;
+    mimeType: string;
+    password: string | null;
+    expiresAt: number | null;
+} | null;
+export declare function deleteShareLink(id: string): void;

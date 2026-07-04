@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Download, Pencil, Trash2 } from 'lucide-react';
+import { Download, Pencil, Trash2, Link } from 'lucide-react';
 import { motion } from 'framer-motion';
 import type { TelegramFile, TelegramFolder } from '../../types';
 
@@ -13,10 +13,11 @@ interface ContextMenuProps {
   onDownload: () => void;
   onDelete: () => void;
   onRename: () => void;
+  onShare: () => void;
 }
 
 export function ContextMenu({
-  x, y, file, onClose, onDownload, onDelete, onRename,
+  x, y, file, onClose, onDownload, onDelete, onRename, onShare,
 }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -79,6 +80,9 @@ export function ContextMenu({
       </button>
       <button className="context-menu-item" onClick={onRename}>
         <Pencil size={15} /> Rename
+      </button>
+      <button className="context-menu-item" onClick={onShare}>
+        <Link size={15} style={{ color: 'var(--text-accent)' }} /> Share File
       </button>
       <div className="context-menu-divider" />
       <button className="context-menu-item danger" onClick={onDelete}>

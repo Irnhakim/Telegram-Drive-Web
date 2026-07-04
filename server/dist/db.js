@@ -49,6 +49,19 @@ export async function initDatabase() {
       PRIMARY KEY (message_id, folder_id)
     )
   `);
+    db.run(`
+    CREATE TABLE IF NOT EXISTS share_links (
+      id TEXT PRIMARY KEY,
+      message_id INTEGER,
+      folder_id TEXT,
+      file_name TEXT,
+      file_size INTEGER,
+      mime_type TEXT,
+      password TEXT,
+      expires_at INTEGER,
+      created_at INTEGER
+    )
+  `);
     saveDb();
 }
 function saveDb() {
@@ -174,5 +187,46 @@ export function getStorageStats() {
             }))
             : [],
     };
+}
+// Share link operations
+export function createShareLink(params) {
+    const d = getDb();
+    const now = Math.floor(Date.now() / 1000);
+    d.run(`INSERT INTO share_links 
+     (id, message_id, folder_id, file_name, file_size, mime_type, password, expires_at, created_at) 
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+        params.id,
+        params.messageId,
+        params.folderId,
+        params.fileName,
+        params.fileSize,
+        params.mimeType,
+        params.password || null,
+        params.expiresAt || null,
+        now,
+    ]);
+    saveDb();
+}
+export function getShareLink(id) {
+    const d = getDb();
+    const results = d.exec('SELECT id, message_id, folder_id, file_name, file_size, mime_type, password, expires_at FROM share_links WHERE id = ?', [id]);
+    if (!results.length || !results[0].values.length)
+        return null;
+    const row = results[0].values[0];
+    return {
+        id: row[0],
+        messageId: row[1],
+        folderId: row[2],
+        fileName: row[3],
+        fileSize: row[4],
+        mimeType: row[5],
+        password: row[6],
+        expiresAt: row[7],
+    };
+}
+export function deleteShareLink(id) {
+    const d = getDb();
+    d.run('DELETE FROM share_links WHERE id = ?', [id]);
+    saveDb();
 }
 //# sourceMappingURL=db.js.map

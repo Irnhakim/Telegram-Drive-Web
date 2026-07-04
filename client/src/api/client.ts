@@ -261,3 +261,32 @@ export const filesApi = {
 export const storageApi = {
   stats: () => request<any>('/api/storage/stats'),
 };
+
+// ── Shares ────────────────────────────────────────────
+export const sharesApi = {
+  generate: (params: {
+    messageId: number;
+    folderId: string;
+    fileName: string;
+    fileSize: number;
+    mimeType: string;
+    password?: string;
+    expiresHours?: number;
+  }) =>
+    request<{ success: boolean; shareId: string; url: string }>('/api/shares/generate', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    }),
+
+  getDetails: (shareId: string) =>
+    request<{
+      id: string;
+      fileName: string;
+      fileSize: number;
+      fileSizeStr: string;
+      mimeType: string;
+      passwordRequired: boolean;
+    }>(`/api/public/shares/${shareId}`),
+
+  downloadUrl: (shareId: string) => `${API_BASE}/api/public/shares/${shareId}/download`,
+};

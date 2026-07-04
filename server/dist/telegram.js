@@ -13,46 +13,53 @@ if (!fs.existsSync(DATA_DIR)) {
 }
 let client = null;
 let phoneCodeHash = null;
-function loadSession() {
+const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
+function loadConfig() {
     try {
-        if (fs.existsSync(SESSION_FILE)) {
-            return fs.readFileSync(SESSION_FILE, 'utf-8').trim();
+        if (fs.existsSync(CONFIG_FILE)) {
+            return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf-8'));
         }
     }
     catch (e) {
-        console.warn('Failed to load session:', e);
+        console.warn('Failed to load local config:', e);
     }
-    return '';
+    return {};
 }
-function saveSession(session) {
+function saveConfig(update) {
     try {
-        fs.writeFileSync(SESSION_FILE, session, 'utf-8');
+        const current = loadConfig();
+        const next = { ...current, ...update };
+        fs.writeFileSync(CONFIG_FILE, JSON.stringify(next, null, 2), 'utf-8');
     }
     catch (e) {
-        console.error('Failed to save session:', e);
+        console.error('Failed to save config:', e);
     }
 }
-function clearSession() {
+function clearConfig() {
     try {
-        if (fs.existsSync(SESSION_FILE)) {
-            fs.unlinkSync(SESSION_FILE);
+        if (fs.existsSync(CONFIG_FILE)) {
+            fs.unlinkSync(CONFIG_FILE);
         }
     }
     catch (e) {
-        console.error('Failed to clear session:', e);
+        console.error('Failed to clear config:', e);
     }
 }
 export function getTelegramClient() {
     return client;
 }
-export async function initClient() {
-    const apiId = parseInt(process.env.TELEGRAM_API_ID || '', 10);
-    const apiHash = process.env.TELEGRAM_API_HASH || '';
+export async function initClient(apiIdInput, apiHashInput) {
+    const conf = loadConfig();
+    const apiId = apiIdInput || conf.apiId || parseInt(process.env.TELEGRAM_API_ID || '', 10);
+    const apiHash = apiHashInput || conf.apiHash || process.env.TELEGRAM_API_HASH || '';
     if (!apiId || !apiHash) {
-        throw new Error('TELEGRAM_API_ID and TELEGRAM_API_HASH environment variables are required');
+        throw new Error('Telegram API ID and API Hash are required. Please configure them on the login page.');
     }
-    const sessionStr = loadSession();
-    const session = new StringSession(sessionStr);
+    // Save the successfully parsed dynamic API credentials
+    if (apiIdInput && apiHashInput) {
+        saveConfig({ apiId, apiHash });
+    }
+    const session = new StringSession(conf.session || '');
     client = new TelegramClient(session, apiId, apiHash, {
         connectionRetries: 5,
         deviceModel: 'Telegram Drive Web',
@@ -62,14 +69,96 @@ export async function initClient() {
     await client.connect();
     return client;
 }
-export async function sendCode(phoneNumber) {
+// QR login structures
+let qrLoginSession = null;
+export async function sendQRToken(apiIdInput, apiHashInput) {
     if (!client) {
-        await initClient();
+        await initClient(apiIdInput, apiHashInput);
     }
+    // Clean disconnect if already logging in
+    qrLoginSession = null;
+    const qr = await client.signIn({
+        phoneNumber: async () => "",
+        phoneCode: async () => "",
+        password: async () => "",
+        qrCode: async (token) => {
+            qrLoginSession = {
+                tokenUrl: `tg://login?token=${token.token.toString("base64url")}`,
+                expires: Date.now() + (token.expires * 1000),
+                status: "pending",
+                user: null,
+            };
+        },
+        onError: (err) => {
+            if (qrLoginSession) {
+                qrLoginSession.status = "error";
+                qrLoginSession.error = err.message;
+            }
+        }
+    });
+    // Wait a maximum of 3s to let the qrCode callback fire and populate qrLoginSession
+    let retries = 30;
+    while (!qrLoginSession && retries > 0) {
+        await new Promise((r) => setTimeout(r, 100));
+        retries--;
+    }
+    if (!qrLoginSession) {
+        throw new Error("Failed to initialize Telegram QR code login session");
+    }
+    // Monitor login execution in the background asynchronously
+    (async () => {
+        try {
+            const user = await qr;
+            if (user && qrLoginSession) {
+                qrLoginSession.status = "success";
+                qrLoginSession.user = user;
+                // Save session on success
+                const sessionStr = client.session.save();
+                saveConfig({ session: sessionStr });
+            }
+        }
+        catch (err) {
+            if (qrLoginSession) {
+                if (err.errorMessage === 'SESSION_PASSWORD_NEEDED') {
+                    qrLoginSession.status = "requires2FA";
+                }
+                else {
+                    qrLoginSession.status = "error";
+                    qrLoginSession.error = err.message || "Authentication rejected";
+                }
+            }
+        }
+    })();
+    return {
+        tokenUrl: qrLoginSession.tokenUrl,
+        expires: qrLoginSession.expires,
+    };
+}
+export async function checkQRStatus() {
+    if (!qrLoginSession) {
+        return { status: "not_started" };
+    }
+    // Check if token expired
+    if (qrLoginSession.status === "pending" && Date.now() > qrLoginSession.expires) {
+        qrLoginSession.status = "expired";
+    }
+    return {
+        status: qrLoginSession.status,
+        user: qrLoginSession.user,
+        error: qrLoginSession.error,
+    };
+}
+export async function sendCode(phoneNumber, apiIdInput, apiHashInput) {
+    if (!client) {
+        await initClient(apiIdInput, apiHashInput);
+    }
+    const conf = loadConfig();
+    const apiId = apiIdInput || conf.apiId || parseInt(process.env.TELEGRAM_API_ID || '', 10);
+    const apiHash = apiHashInput || conf.apiHash || process.env.TELEGRAM_API_HASH || '';
     const result = await client.invoke(new Api.auth.SendCode({
         phoneNumber,
-        apiId: parseInt(process.env.TELEGRAM_API_ID || '', 10),
-        apiHash: process.env.TELEGRAM_API_HASH || '',
+        apiId: apiId,
+        apiHash: apiHash,
         settings: new Api.CodeSettings({}),
     }));
     phoneCodeHash = result.phoneCodeHash;
@@ -86,7 +175,7 @@ export async function verifyCode(phoneNumber, code, hash) {
         }));
         // Save session on success
         const sessionStr = client.session.save();
-        saveSession(sessionStr);
+        saveConfig({ session: sessionStr });
         return { success: true };
     }
     catch (err) {
@@ -109,7 +198,7 @@ export async function verify2FA(password) {
     }));
     if (result) {
         const sessionStr = client.session.save();
-        saveSession(sessionStr);
+        saveConfig({ session: sessionStr });
         return { success: true };
     }
     throw new Error('2FA verification failed');
@@ -117,8 +206,8 @@ export async function verify2FA(password) {
 export async function checkAuth() {
     try {
         if (!client) {
-            const sessionStr = loadSession();
-            if (!sessionStr)
+            const conf = loadConfig();
+            if (!conf.session)
                 return false;
             await initClient();
         }
@@ -143,7 +232,7 @@ export async function logout() {
     }
     finally {
         client = null;
-        clearSession();
+        clearConfig();
     }
 }
 export async function getMe() {
@@ -312,6 +401,62 @@ export async function deleteChannel(channelId) {
     catch (e) {
         console.error('Failed to delete channel:', e);
         return false;
+    }
+}
+// Toggle channel publicity (Make Public / Private)
+export async function updateChannelPublicity(channelId, isPublic, username) {
+    if (!client || !client.connected)
+        return false;
+    try {
+        if (isPublic) {
+            if (!username)
+                throw new Error("Username is required to make a channel public");
+            // Update channel username to make it public
+            await client.invoke(new Api.channels.UpdateUsername({
+                channel: channelId,
+                username: username,
+            }));
+        }
+        else {
+            // Set username to empty to make it private
+            await client.invoke(new Api.channels.UpdateUsername({
+                channel: channelId,
+                username: "",
+            }));
+        }
+        return true;
+    }
+    catch (e) {
+        console.error('Failed to update channel publicity:', e);
+        return false;
+    }
+}
+// Get channel invite link
+export async function getChannelInviteLink(channelId) {
+    if (!client || !client.connected)
+        return null;
+    try {
+        const result = await client.invoke(new Api.channels.GetFullChannel({
+            channel: channelId,
+        }));
+        const fullChat = result.fullChat;
+        if (fullChat.exportedInvite) {
+            if (fullChat.exportedInvite instanceof Api.ChatInviteExported) {
+                return fullChat.exportedInvite.link;
+            }
+        }
+        // Create new invite link if none exists
+        const invite = await client.invoke(new Api.messages.ExportChatInvite({
+            peer: channelId,
+        }));
+        if (invite instanceof Api.ChatInviteExported) {
+            return invite.link;
+        }
+        return null;
+    }
+    catch (e) {
+        console.error('Failed to get invite link:', e);
+        return null;
     }
 }
 // Delete message(s)

@@ -3,17 +3,29 @@ import { accessApi, authApi, setAccessToken, clearAccessToken } from './api/clie
 import { AccessGate } from './components/auth/AccessGate';
 import { LoginWizard } from './components/auth/LoginWizard';
 import { Dashboard } from './components/dashboard/Dashboard';
+import { ShareDownload } from './components/shared/ShareDownload';
 import type { UserInfo } from './types';
 
-type AppState = 'loading' | 'access-gate' | 'login' | 'dashboard';
+type AppState = 'loading' | 'access-gate' | 'login' | 'dashboard' | 'public-share';
 
 function App() {
   const [state, setState] = useState<AppState>('loading');
   const [user, setUser] = useState<UserInfo | null>(null);
   const [passwordRequired, setPasswordRequired] = useState(false);
+  const [shareId, setShareId] = useState<string | null>(null);
 
   // Check initial state
   useEffect(() => {
+    // Check if accessing a public share link
+    const path = window.location.pathname;
+    if (path.startsWith('/share/')) {
+      const id = path.substring(7); // Remove '/share/'
+      if (id) {
+        setShareId(id);
+        setState('public-share');
+        return;
+      }
+    }
     const init = async () => {
       try {
         // 1. Check if access password is required
@@ -105,6 +117,11 @@ function App() {
   // Telegram login
   if (state === 'login') {
     return <LoginWizard onLogin={handleTelegramLogin} />;
+  }
+
+  // Public share landing page
+  if (state === 'public-share' && shareId) {
+    return <ShareDownload shareId={shareId} />;
   }
 
   // Dashboard

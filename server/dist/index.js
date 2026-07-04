@@ -98,16 +98,25 @@ app.get('/api/health', (_req, res) => {
         connected: client?.connected || false,
     });
 });
+import { sharesRouter } from './routes/shares.js';
+// Public share routes (Accessible without access password)
+app.use('/api/public/shares', sharesRouter);
 // All API routes require access password
 app.use('/api/auth', requireAccess, authRouter);
 app.use('/api/folders', requireAccess, requireTelegramAuth, foldersRouter);
 app.use('/api/files', requireAccess, requireTelegramAuth, filesRouter);
 app.use('/api/storage', requireAccess, requireTelegramAuth, storageRouter);
+app.use('/api/shares', requireAccess, requireTelegramAuth, sharesRouter);
 // Serve static frontend in production
 const clientDistPath = path.resolve(__dirname, '../../client/dist');
 app.use(express.static(clientDistPath));
-app.get('*', (_req, res) => {
-    res.sendFile(path.join(clientDistPath, 'index.html'));
+app.use((req, res, next) => {
+    if (req.path.startsWith('/api')) {
+        next();
+    }
+    else {
+        res.sendFile(path.join(clientDistPath, 'index.html'));
+    }
 });
 // Initialize
 async function start() {

@@ -26,21 +26,44 @@ export function Dashboard({ user, onLogout, onAccessLogout }: DashboardProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [totalFiles, setTotalFiles] = useState(0);
 
-  // Load folders
+  // Theme support
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    const saved = localStorage.getItem('theme');
+    if (saved === 'dark' || saved === 'light') return saved;
+    return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  });
+
+  // Apply theme class to :root
   useEffect(() => {
-    const loadFolders = async () => {
-      setLoadingFolders(true);
-      try {
-        const result = await foldersApi.list();
-        setFolders(result.folders);
-      } catch (err) {
-        console.error('Failed to load folders:', err);
-      } finally {
-        setLoadingFolders(false);
-      }
-    };
-    loadFolders();
+    const root = document.documentElement;
+    if (theme === 'light') {
+      root.classList.add('light');
+    } else {
+      root.classList.remove('light');
+    }
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  const handleToggleTheme = useCallback(() => {
+    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
   }, []);
+
+  // Load folders
+  const loadFolders = useCallback(async () => {
+    setLoadingFolders(true);
+    try {
+      const result = await foldersApi.list();
+      setFolders(result.folders);
+    } catch (err) {
+      console.error('Failed to load folders:', err);
+    } finally {
+      setLoadingFolders(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadFolders();
+  }, [loadFolders]);
 
   // Load files when folder/search/sort changes
   const loadFiles = useCallback(async () => {
@@ -138,6 +161,43 @@ export function Dashboard({ user, onLogout, onAccessLogout }: DashboardProps) {
     }
   }, []);
 
+  // Handle folder rename
+  const handleRenameFolder = useCallback(async (id: string, name: string) => {
+    try {
+      await foldersApi.rename(id, name);
+      setFolders((prev) =>
+        prev.map((f) => (f.id === id ? { ...f, name } : f))
+      );
+    } catch (err) {
+      console.error('Rename folder failed:', err);
+    }
+  }, []);
+
+  // Handle folder delete
+  const handleDeleteFolder = useCallback(async (id: string) => {
+    try {
+      await foldersApi.delete(id);
+      setFolders((prev) => prev.filter((f) => f.id !== id));
+      if (currentFolderId === id) {
+        setCurrentFolderId('me');
+      }
+    } catch (err) {
+      console.error('Delete folder failed:', err);
+    }
+  }, [currentFolderId]);
+
+  // Handle publicity toggle
+  const handleUpdateFolderPublicity = useCallback(async (id: string, isPublic: boolean, username?: string) => {
+    try {
+      await foldersApi.updatePublicity(id, isPublic, username);
+      setFolders((prev) =>
+        prev.map((f) => (f.id === id ? { ...f, username: isPublic ? username : undefined } : f))
+      );
+    } catch (err: any) {
+      alert('Failed to change publicity: ' + err.message);
+    }
+  }, []);
+
   // Dismiss upload
   const handleDismissUpload = useCallback((uploadId: string) => {
     setUploads((prev) => prev.filter((u) => u.id !== uploadId));
@@ -146,7 +206,7 @@ export function Dashboard({ user, onLogout, onAccessLogout }: DashboardProps) {
   const currentFolder = folders.find((f) => f.id === currentFolderId);
 
   return (
-    <div className="app-layout">
+    <div className="app-layout animate-fade-in">
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div
@@ -161,8 +221,13 @@ export function Dashboard({ user, onLogout, onAccessLogout }: DashboardProps) {
         loading={loadingFolders}
         user={user}
         open={sidebarOpen}
+        theme={theme}
         onSelectFolder={(id) => { setCurrentFolderId(id); setSidebarOpen(false); }}
         onCreateFolder={handleCreateFolder}
+        onRenameFolder={handleRenameFolder}
+        onDeleteFolder={handleDeleteFolder}
+        onUpdateFolderPublicity={handleUpdateFolderPublicity}
+        onToggleTheme={handleToggleTheme}
         onLogout={onLogout}
         onAccessLogout={onAccessLogout}
       />
