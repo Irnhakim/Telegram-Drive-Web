@@ -4,7 +4,7 @@ import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 import { FileExplorer } from './FileExplorer';
 import { UploadProgress } from './UploadProgress';
-import type { UserInfo, TelegramFolder, TelegramFile, ViewMode, SortField, SortOrder, UploadItem } from '../../types';
+import type { UserInfo, TelegramFolder, TelegramFile, ViewMode, UploadItem } from '../../types';
 
 interface DashboardProps {
   user: UserInfo | null;
@@ -16,12 +16,9 @@ export function Dashboard({ user, onLogout, onAccessLogout }: DashboardProps) {
   const [folders, setFolders] = useState<TelegramFolder[]>([]);
   const [currentFolderId, setCurrentFolderId] = useState('me');
   const [files, setFiles] = useState<TelegramFile[]>([]);
-  const [loading, setLoading] = useState(false);
   const [loadingFolders, setLoadingFolders] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortField, setSortField] = useState<SortField>('created_at');
-  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [totalFiles, setTotalFiles] = useState(0);
@@ -65,25 +62,20 @@ export function Dashboard({ user, onLogout, onAccessLogout }: DashboardProps) {
     loadFolders();
   }, [loadFolders]);
 
-  // Load files when folder/search/sort changes
+  // Load files when folder/search changes
   const loadFiles = useCallback(async () => {
-    setLoading(true);
     try {
       const result = await filesApi.list({
         folderId: currentFolderId,
         limit: 100,
         search: searchQuery,
-        sort: sortField,
-        order: sortOrder,
       });
       setFiles(result.files);
       setTotalFiles(result.total);
     } catch (err) {
       console.error('Failed to load files:', err);
-    } finally {
-      setLoading(false);
     }
-  }, [currentFolderId, searchQuery, sortField, sortOrder]);
+  }, [currentFolderId, searchQuery]);
 
   useEffect(() => {
     loadFiles();
@@ -237,28 +229,20 @@ export function Dashboard({ user, onLogout, onAccessLogout }: DashboardProps) {
           currentFolder={currentFolder}
           viewMode={viewMode}
           searchQuery={searchQuery}
-          sortField={sortField}
-          sortOrder={sortOrder}
           totalFiles={totalFiles}
           onViewModeChange={setViewMode}
           onSearchChange={setSearchQuery}
-          onSortFieldChange={setSortField}
-          onSortOrderChange={setSortOrder}
-          onUpload={handleUpload}
           onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
-          onRefresh={loadFiles}
         />
 
         <FileExplorer
           files={files}
-          loading={loading}
           viewMode={viewMode}
           currentFolderId={currentFolderId}
           folders={folders}
           onUpload={handleUpload}
           onDelete={handleDelete}
           onRename={handleRename}
-          onRefresh={loadFiles}
         />
       </div>
 

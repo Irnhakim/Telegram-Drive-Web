@@ -31,7 +31,17 @@ export async function initDatabase(): Promise<void> {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       is_saved_messages INTEGER DEFAULT 0,
+      group_id TEXT,
       updated_at INTEGER DEFAULT 0
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS groups (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      color TEXT NOT NULL,
+      created_at INTEGER
     )
   `);
 
@@ -72,6 +82,13 @@ export async function initDatabase(): Promise<void> {
     )
   `);
 
+  // Alter table migration to add group_id to folder_cache if database exists but doesn't have it
+  try {
+    db.run('ALTER TABLE folder_cache ADD COLUMN group_id TEXT');
+  } catch (e) {
+    // Column already exists, ignore error
+  }
+
   saveDb();
 }
 
@@ -98,22 +115,28 @@ export function cacheFolders(folders: Array<{ id: string; name: string; isSavedM
 
   for (const f of folders) {
     d.run(
-      'INSERT OR REPLACE INTO folder_cache (id, name, is_saved_messages, updated_at) VALUES (?, ?, ?, ?)',
+      `INSERT INTO folder_cache (id, name, is_saved_messages, updated_at) 
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET 
+         name = excluded.name,
+         is_saved_messages = excluded.is_saved_messages,
+         updated_at = excluded.updated_at`,
       [f.id, f.name, f.isSavedMessages ? 1 : 0, now]
     );
   }
   saveDb();
 }
 
-export function getCachedFolders(): Array<{ id: string; name: string; is_saved_messages: number }> {
+export function getCachedFolders(): Array<{ id: string; name: string; is_saved_messages: number; group_id: string | null }> {
   const d = getDb();
-  const results = d.exec('SELECT id, name, is_saved_messages FROM folder_cache ORDER BY is_saved_messages DESC, name ASC');
+  const results = d.exec('SELECT id, name, is_saved_messages, group_id FROM folder_cache ORDER BY is_saved_messages DESC, name ASC');
   if (!results.length) return [];
 
   return results[0].values.map((row) => ({
     id: row[0] as string,
     name: row[1] as string,
     is_saved_messages: row[2] as number,
+    group_id: row[3] as string | null,
   }));
 }
 
@@ -285,5 +308,41 @@ export function getShareLink(id: string) {
 export function deleteShareLink(id: string) {
   const d = getDb();
   d.run('DELETE FROM share_links WHERE id = ?', [id]);
+  saveDb();
+}
+
+// Group operations
+export function createGroup(id: string, name: string, color: string) {
+  const d = getDb();
+  const now = Math.floor(Date.now() / 1000);
+  d.run(
+    'INSERT INTO groups (id, name, color, created_at) VALUES (?, ?, ?, ?)',
+    [id, name, color, now]
+  );
+  saveDb();
+}
+
+export function getGroups() {
+  const d = getDb();
+  const results = d.exec('SELECT id, name, color FROM groups ORDER BY created_at ASC');
+  if (!results.length) return [];
+  return results[0].values.map((row) => ({
+    id: row[0] as string,
+    name: row[1] as string,
+    color: row[2] as string,
+  }));
+}
+
+export function deleteGroup(id: string) {
+  const d = getDb();
+  d.run('DELETE FROM groups WHERE id = ?', [id]);
+  // Dissociate folders belonging to this group
+  d.run('UPDATE folder_cache SET group_id = NULL WHERE group_id = ?', [id]);
+  saveDb();
+}
+
+export function updateFolderGroup(folderId: string, groupId: string | null) {
+  const d = getDb();
+  d.run('UPDATE folder_cache SET group_id = ? WHERE id = ?', [groupId, folderId]);
   saveDb();
 }

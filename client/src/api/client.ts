@@ -290,3 +290,26 @@ export const sharesApi = {
 
   downloadUrl: (shareId: string) => `${API_BASE}/api/public/shares/${shareId}/download`,
 };
+
+// ── Groups ────────────────────────────────────────────
+export const groupsApi = {
+  list: () =>
+    request<{ success: boolean; groups: Array<{ id: string; name: string; color: string }> }>('/api/groups'),
+
+  create: (name: string, color: string) =>
+    request<{ success: boolean; group: { id: string; name: string; color: string } }>('/api/groups', {
+      method: 'POST',
+      body: JSON.stringify({ name, color }),
+    }),
+
+  delete: (groupId: string) =>
+    request<{ success: boolean }>(`/api/groups/${groupId}`, {
+      method: 'DELETE',
+    }),
+
+  assignFolder: (folderId: string, groupId: string | null) =>
+    request<{ success: boolean }>(`/api/groups/folders/${folderId}`, {
+      method: 'POST',
+      body: JSON.stringify({ groupId }),
+    }),
+};

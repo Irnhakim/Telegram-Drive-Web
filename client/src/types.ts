@@ -17,6 +17,7 @@ export interface TelegramFolder {
   name: string;
   type: 'saved' | 'channel';
   username?: string;
+  groupId?: string | null;
 }
 
 export interface UserInfo {
