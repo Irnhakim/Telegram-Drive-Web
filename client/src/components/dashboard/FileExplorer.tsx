@@ -5,6 +5,7 @@ import { FileCard } from './FileCard';
 import { FileListItem } from './FileListItem';
 import { ContextMenu } from './ContextMenu';
 import { ShareModal } from './ShareModal';
+import { FilePreviewModal } from './FilePreviewModal';
 import { filesApi } from '../../api/client';
 import type { TelegramFile, TelegramFolder, ViewMode } from '../../types';
 
@@ -30,6 +31,7 @@ export function FileExplorer({
     x: number; y: number; file: TelegramFile;
   } | null>(null);
   const [shareFile, setShareFile] = useState<TelegramFile | null>(null);
+  const [previewFile, setPreviewFile] = useState<TelegramFile | null>(null);
   const [zoomLevel, setZoomLevel] = useState(100);
   const [sortField, setSortField] = useState<'name' | 'size' | 'date'>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
@@ -240,7 +242,7 @@ export function FileExplorer({
               <FileCard
                 file={file}
                 folderId={currentFolderId}
-                onDownload={() => handleDownload(file)}
+                onDownload={() => setPreviewFile(file)}
                 onContextMenu={(e) => handleContextMenu(e, file)}
                 isSelected={selectedFileIds.includes(file.id)}
                 onToggleSelect={(e) => {
@@ -310,7 +312,7 @@ export function FileExplorer({
             >
               <FileListItem
                 file={file}
-                onDownload={() => handleDownload(file)}
+                onDownload={() => setPreviewFile(file)}
                 onContextMenu={(e) => handleContextMenu(e, file)}
                 isSelected={selectedFileIds.includes(file.id)}
                 onToggleSelect={(e) => {
@@ -345,6 +347,15 @@ export function FileExplorer({
           file={shareFile}
           folderId={currentFolderId}
           onClose={() => setShareFile(null)}
+        />
+      )}
+
+      {/* Preview Modal */}
+      {previewFile && (
+        <FilePreviewModal
+          file={previewFile}
+          folderId={currentFolderId}
+          onClose={() => setPreviewFile(null)}
         />
       )}
     </div>
