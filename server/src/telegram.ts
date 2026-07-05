@@ -409,7 +409,7 @@ export async function downloadFileToBuffer(
   return null;
 }
 
-// Stream file in chunks (stateless stateless downloading)
+// Stream file in chunks (stateless stateless downloading using gram.js iterFile)
 export async function* downloadFileStream(
   message: Api.Message,
   fileSize: number
@@ -421,35 +421,18 @@ export async function* downloadFileStream(
     throw new Error('Message does not contain a valid document');
   }
 
-  const document = media.document as Api.Document;
-  
-  const inputDocument = new Api.InputDocumentFileLocation({
-    id: document.id,
-    accessHash: document.accessHash,
-    fileReference: document.fileReference,
-    thumbSize: '',
+  // client.iterDownload yields Buffer chunks automatically
+  const fileIterator = client.iterDownload({
+    file: media,
+    requestSize: 512 * 1024, // Required by gram.js types
   });
 
-  const chunkSize = 512 * 1024; // 512 KB chunks
-  let offset = 0;
-
-  while (offset < fileSize) {
-    const limit = Math.min(chunkSize, fileSize - offset);
-    const result = await client.invoke(
-      new Api.upload.GetFile({
-        location: inputDocument,
-        offset: BigInt(offset) as any,
-        limit: limit,
-      })
-    );
-
-    if (result instanceof Api.upload.File) {
-      yield result.bytes;
-    } else {
-      break;
+  for await (const chunk of fileIterator) {
+    if (Buffer.isBuffer(chunk)) {
+      yield chunk;
+    } else if (typeof chunk === 'string') {
+      yield Buffer.from(chunk);
     }
-
-    offset += limit;
   }
 }
 

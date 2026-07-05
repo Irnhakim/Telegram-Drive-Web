@@ -330,7 +330,7 @@ export async function downloadFileToBuffer(message) {
     }
     return null;
 }
-// Stream file in chunks (stateless stateless downloading)
+// Stream file in chunks (stateless stateless downloading using gram.js iterFile)
 export async function* downloadFileStream(message, fileSize) {
     if (!client || !client.connected)
         throw new Error('Not connected');
@@ -338,29 +338,18 @@ export async function* downloadFileStream(message, fileSize) {
     if (!media || !(media instanceof Api.MessageMediaDocument) || !media.document) {
         throw new Error('Message does not contain a valid document');
     }
-    const document = media.document;
-    const inputDocument = new Api.InputDocumentFileLocation({
-        id: document.id,
-        accessHash: document.accessHash,
-        fileReference: document.fileReference,
-        thumbSize: '',
+    // client.iterDownload yields Buffer chunks automatically
+    const fileIterator = client.iterDownload({
+        file: media,
+        limit: 512 * 1024, // Optimal chunk limit (512 KB)
     });
-    const chunkSize = 512 * 1024; // 512 KB chunks
-    let offset = 0;
-    while (offset < fileSize) {
-        const limit = Math.min(chunkSize, fileSize - offset);
-        const result = await client.invoke(new Api.upload.GetFile({
-            location: inputDocument,
-            offset: BigInt(offset),
-            limit: limit,
-        }));
-        if (result instanceof Api.upload.File) {
-            yield result.bytes;
+    for await (const chunk of fileIterator) {
+        if (Buffer.isBuffer(chunk)) {
+            yield chunk;
         }
-        else {
-            break;
+        else if (typeof chunk === 'string') {
+            yield Buffer.from(chunk);
         }
-        offset += limit;
     }
 }
 // Download thumbnail
