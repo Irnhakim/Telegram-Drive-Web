@@ -26,7 +26,11 @@ export function Dashboard({ user, onLogout, onAccessLogout }: DashboardProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const handleToggleSidebar = useCallback(() => {
-    setSidebarCollapsed((prev) => !prev);
+    if (window.innerWidth <= 768) {
+      setSidebarOpen((prev) => !prev);
+    } else {
+      setSidebarCollapsed((prev) => !prev);
+    }
   }, []);
 
   // Theme support

@@ -4,6 +4,17 @@ import { createShareLink, getShareLink, deleteShareLink } from '../db.js';
 import { getTelegramClient, downloadFileStream, getSavedMessages } from '../telegram.js';
 import { getMimeType, formatFileSize } from '../utils.js';
 export const sharesRouter = Router();
+// Enable CORS for all public share endpoints
+sharesRouter.use((req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    if (req.method === 'OPTIONS') {
+        res.sendStatus(200);
+        return;
+    }
+    next();
+});
 // Helper: resolve folder entity
 async function resolveEntity(folderId) {
     const client = getTelegramClient();
@@ -80,11 +91,11 @@ sharesRouter.get('/:shareId', (req, res) => {
         res.status(500).json({ error: { code: 'SHARE_ERROR', message: err.message } });
     }
 });
-// Download shared file (PUBLIC)
-sharesRouter.post('/:shareId/download', async (req, res) => {
+// Download shared file (PUBLIC - supports GET with query password)
+sharesRouter.get('/:shareId/download', async (req, res) => {
     try {
         const { shareId } = req.params;
-        const { password } = req.body;
+        const password = req.query.password || '';
         const share = getShareLink(shareId);
         if (!share) {
             res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Share link not found or expired' } });
@@ -99,6 +110,11 @@ sharesRouter.post('/:shareId/download', async (req, res) => {
         // Check password protection
         if (share.password && share.password !== password) {
             res.status(401).json({ error: { code: 'INVALID_PASSWORD', message: 'Password is incorrect' } });
+            return;
+        }
+        // If only verifying password, exit early
+        if (req.query.verify) {
+            res.json({ success: true, message: 'Password verified' });
             return;
         }
         const entity = await resolveEntity(share.folderId);

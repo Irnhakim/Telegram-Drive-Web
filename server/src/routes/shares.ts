@@ -7,6 +7,18 @@ import { getMimeType, formatFileSize } from '../utils.js';
 
 export const sharesRouter = Router();
 
+// Enable CORS for all public share endpoints
+sharesRouter.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200);
+    return;
+  }
+  next();
+});
+
 // Helper: resolve folder entity
 async function resolveEntity(folderId: string): Promise<Api.TypeEntityLike | null> {
   const client = getTelegramClient();
