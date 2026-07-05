@@ -290,7 +290,10 @@ export const sharesApi = {
       passwordRequired: boolean;
     }>(`/api/public/shares/${shareId}`),
 
-  downloadUrl: (shareId: string) => `${API_BASE}/api/public/shares/${shareId}/download`,
+  downloadUrl: (shareId: string, password?: string) => {
+    const q = password ? `?password=${encodeURIComponent(password)}` : '';
+    return `${API_BASE}/api/public/shares/${shareId}/download${q}`;
+  },
 };
 
 // ── Groups ────────────────────────────────────────────

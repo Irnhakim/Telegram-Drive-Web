@@ -91,11 +91,11 @@ sharesRouter.get('/:shareId', (req, res) => {
   }
 });
 
-// Download shared file (PUBLIC)
-sharesRouter.post('/:shareId/download', async (req, res) => {
+// Download shared file (PUBLIC - supports GET with query password)
+sharesRouter.get('/:shareId/download', async (req, res) => {
   try {
     const { shareId } = req.params;
-    const { password } = req.body;
+    const password = (req.query.password as string) || '';
 
     const share = getShareLink(shareId);
 
@@ -114,6 +114,12 @@ sharesRouter.post('/:shareId/download', async (req, res) => {
     // Check password protection
     if (share.password && share.password !== password) {
       res.status(401).json({ error: { code: 'INVALID_PASSWORD', message: 'Password is incorrect' } });
+      return;
+    }
+
+    // If only verifying password, exit early
+    if (req.query.verify) {
+      res.json({ success: true, message: 'Password verified' });
       return;
     }
 

@@ -339,6 +339,14 @@ h4 { font-size: 0.9375rem; font-weight: 600; }
   gap: 16px;
 }
 
+.mobile-menu-btn {
+  display: none !important;
+}
+
+.app-layout.sidebar-collapsed .mobile-menu-btn {
+  display: flex !important;
+}
+
 .content-area {
   flex: 1;
   overflow-y: auto;
@@ -827,4 +835,77 @@ h4 { font-size: 0.9375rem; font-weight: 600; }
 :focus-visible {
   outline: 2px solid var(--accent-primary);
   outline-offset: 2px;
+}
+
+/* ── Responsive styling (Mobile-first viewport compatibility) ────────────────── */
+@media (max-width: 768px) {
+  .mobile-menu-btn {
+    display: flex !important;
+  }
+
+  .app-layout {
+    position: relative;
+  }
+
+  .sidebar {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 1000;
+    background: var(--bg-secondary);
+    box-shadow: 8px 0 32px rgba(0, 0, 0, 0.5);
+    width: var(--sidebar-width);
+    min-width: var(--sidebar-width);
+    transform: translateX(-100%);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* When mobile sidebar is open (using className='open') */
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+  .app-layout.sidebar-collapsed .sidebar {
+    transform: translateX(-100%);
+  }
+
+  /* Overlay cover for mobile */
+  .sidebar-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    z-index: 999;
+  }
+
+  .topbar {
+    padding: 0 16px;
+    gap: 12px;
+  }
+
+  /* Flex wrap bulk actions panel so they look readable on small displays */
+  .topbar > div {
+    flex-wrap: wrap;
+    gap: 8px !important;
+  }
+
+  .content-area {
+    padding: 16px;
+  }
+
+  /* Force grid explorer layout to auto-fill at 1 or 2 columns maximum on small phones */
+  .grid-layout {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)) !important;
+    gap: 12px !important;
+  }
+
+  /* File cards sizes in mobile view */
+  .file-card {
+    padding: 12px 8px !important;
+  }
+
+  .file-card .thumbnail-container {
+    height: 70px !important;
+  }
 }

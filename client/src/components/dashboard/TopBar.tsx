@@ -1,4 +1,4 @@
-import { Search, LayoutGrid, List, X, ChevronRight } from 'lucide-react';
+import { Search, LayoutGrid, List, X, ChevronRight, Menu } from 'lucide-react';
 import type { TelegramFolder, ViewMode } from '../../types';
 
 interface TopBarProps {
@@ -34,20 +34,18 @@ export function TopBar({
       
       {/* Breadcrumb & Uncollapse Trigger (Left corner) */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.875rem', fontWeight: 500 }}>
-        {sidebarCollapsed && (
-          <button
-            onClick={onToggleSidebar}
-            className="btn btn-ghost btn-icon"
-            style={{
-              padding: '4px', color: 'var(--text-primary)',
-              background: 'rgba(255,255,255,0.05)', borderRadius: '4px',
-              cursor: 'pointer', border: 'none', display: 'flex', alignItems: 'center'
-            }}
-            title="Show Sidebar"
-          >
-            <ChevronRight size={16} />
-          </button>
-        )}
+        <button
+          onClick={onToggleSidebar}
+          className="btn btn-ghost btn-icon mobile-menu-btn"
+          style={{
+            padding: '4px', color: 'var(--text-primary)',
+            background: 'rgba(255,255,255,0.05)', borderRadius: '4px',
+            cursor: 'pointer', border: 'none', display: 'flex', alignItems: 'center'
+          }}
+          title="Toggle Sidebar"
+        >
+          {sidebarCollapsed ? <ChevronRight size={16} /> : <Menu size={16} />}
+        </button>
         <span style={{ color: 'var(--text-muted)' }}>Start</span>
         <span style={{ color: 'var(--text-muted)' }}>/</span>
         <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{currentFolder?.name || 'Loading...'}</span>

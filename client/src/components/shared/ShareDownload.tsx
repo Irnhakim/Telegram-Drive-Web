@@ -38,28 +38,24 @@ export function ShareDownload({ shareId }: ShareDownloadProps) {
     setError('');
 
     try {
-      // Direct POST download stream request with password verification
-      const res = await fetch(sharesApi.downloadUrl(shareId), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
-      });
-
-      if (!res.ok) {
-        const errJson = await res.json().catch(() => ({ error: { message: 'Download failed' } }));
-        throw new Error(errJson.error?.message || 'Invalid password or expired link');
+      // First, quickly verify password by calling detail endpoint with query if password protected
+      if (fileInfo.passwordRequired) {
+        const verifyRes = await fetch(sharesApi.downloadUrl(shareId, password) + '&verify=1');
+        if (!verifyRes.ok) {
+          const errJson = await verifyRes.json().catch(() => ({ error: { message: 'Password is incorrect' } }));
+          throw new Error(errJson.error?.message || 'Password is incorrect');
+        }
       }
 
-      // Convert body stream to Blob to download
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
+      // Trigger direct native browser download (streaming)
+      const downloadUrl = sharesApi.downloadUrl(shareId, password);
       const a = document.createElement('a');
-      a.href = url;
-      a.download = fileInfo.fileName;
+      a.href = downloadUrl;
+      // Tell browser to download
+      a.setAttribute('download', fileInfo.fileName);
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
 
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
