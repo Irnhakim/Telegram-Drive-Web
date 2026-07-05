@@ -4,7 +4,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { getTelegramClient, getMessages, getSavedMessages, uploadFile, downloadFileToBuffer, downloadThumbnail, deleteMessages, forwardMessage, editCaption, } from '../telegram.js';
+import { getTelegramClient, getMessages, getSavedMessages, uploadFile, downloadFileToBuffer, downloadFileStream, downloadThumbnail, deleteMessages, forwardMessage, editCaption, } from '../telegram.js';
 import { cacheFiles, cacheThumbnail, getCachedThumbnail, clearFileCache } from '../db.js';
 import { formatFileSize, getFileCategory } from '../utils.js';
 const __filename = fileURLToPath(import.meta.url);
@@ -197,21 +197,26 @@ filesRouter.get('/:messageId/download', async (req, res) => {
         }
         const msg = msgs[0];
         const info = extractFileInfo(msg, folderId);
-        const buffer = await downloadFileToBuffer(msg);
-        if (!buffer) {
-            res.status(500).json({ error: { code: 'DOWNLOAD_FAILED', message: 'Failed to download file' } });
-            return;
-        }
         res.setHeader('Content-Type', info.mimeType);
         res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(info.name)}"`);
-        res.setHeader('Content-Length', buffer.length.toString());
-        res.send(buffer);
+        res.setHeader('Content-Length', info.size.toString());
+        // Stream chunks directly to client
+        const stream = downloadFileStream(msg, info.size);
+        for await (const chunk of stream) {
+            res.write(chunk);
+            // Abort if browser cancelled download early
+            if (res.destroyed)
+                break;
+        }
+        res.end();
     }
     catch (err) {
         console.error('Download error:', err);
-        res.status(500).json({
-            error: { code: 'DOWNLOAD_FAILED', message: err.message },
-        });
+        if (!res.headersSent) {
+            res.status(500).json({
+                error: { code: 'DOWNLOAD_FAILED', message: err.message },
+            });
+        }
     }
 });
 // Get thumbnail

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import crypto from 'crypto';
 import { Api } from 'telegram';
 import { createShareLink, getShareLink, deleteShareLink } from '../db.js';
-import { getTelegramClient, downloadFileToBuffer, getSavedMessages } from '../telegram.js';
+import { getTelegramClient, downloadFileToBuffer, downloadFileStream, getSavedMessages } from '../telegram.js';
 import { getMimeType, formatFileSize } from '../utils.js';
 
 export const sharesRouter = Router();
@@ -96,7 +96,7 @@ sharesRouter.post('/:shareId/download', async (req, res) => {
   try {
     const { shareId } = req.params;
     const { password } = req.body;
-    
+
     const share = getShareLink(shareId);
 
     if (!share) {
@@ -135,18 +135,22 @@ sharesRouter.post('/:shareId/download', async (req, res) => {
       return;
     }
 
-    const buffer = await downloadFileToBuffer(msgs[0] as Api.Message);
-    if (!buffer) {
-      res.status(500).json({ error: { code: 'DOWNLOAD_FAILED', message: 'Failed to download file' } });
-      return;
-    }
-
     res.setHeader('Content-Type', share.mimeType);
     res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(share.fileName)}"`);
-    res.setHeader('Content-Length', buffer.length.toString());
-    res.send(buffer);
+    res.setHeader('Content-Length', share.fileSize.toString());
+
+    // Stream chunks directly to client
+    const stream = downloadFileStream(msgs[0] as Api.Message, share.fileSize);
+    for await (const chunk of stream) {
+      res.write(chunk);
+      // Abort downloading if client closed the connection early
+      if (res.destroyed) break;
+    }
+    res.end();
   } catch (err: any) {
     console.error('Download share file error:', err);
-    res.status(500).json({ error: { code: 'DOWNLOAD_FAILED', message: err.message } });
+    if (!res.headersSent) {
+      res.status(500).json({ error: { code: 'DOWNLOAD_FAILED', message: err.message } });
+    }
   }
 });

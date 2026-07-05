@@ -409,6 +409,50 @@ export async function downloadFileToBuffer(
   return null;
 }
 
+// Stream file in chunks (stateless stateless downloading)
+export async function* downloadFileStream(
+  message: Api.Message,
+  fileSize: number
+): AsyncGenerator<Buffer, void, unknown> {
+  if (!client || !client.connected) throw new Error('Not connected');
+
+  const media = message.media;
+  if (!media || !(media instanceof Api.MessageMediaDocument) || !media.document) {
+    throw new Error('Message does not contain a valid document');
+  }
+
+  const document = media.document as Api.Document;
+  
+  const inputDocument = new Api.InputDocumentFileLocation({
+    id: document.id,
+    accessHash: document.accessHash,
+    fileReference: document.fileReference,
+    thumbSize: '',
+  });
+
+  const chunkSize = 512 * 1024; // 512 KB chunks
+  let offset = 0;
+
+  while (offset < fileSize) {
+    const limit = Math.min(chunkSize, fileSize - offset);
+    const result = await client.invoke(
+      new Api.upload.GetFile({
+        location: inputDocument,
+        offset: BigInt(offset) as any,
+        limit: limit,
+      })
+    );
+
+    if (result instanceof Api.upload.File) {
+      yield result.bytes;
+    } else {
+      break;
+    }
+
+    offset += limit;
+  }
+}
+
 // Download thumbnail
 export async function downloadThumbnail(
   message: Api.Message

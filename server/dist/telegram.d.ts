@@ -36,6 +36,7 @@ export declare function getMessages(entity: Api.TypeEntityLike, options?: {
 export declare function uploadFile(entity: Api.TypeEntityLike, filePath: string, fileName: string): Promise<Api.Message>;
 export declare function downloadFile(message: Api.Message, outputPath: string, progressCallback?: (progress: number) => void): Promise<string>;
 export declare function downloadFileToBuffer(message: Api.Message): Promise<Buffer | null>;
+export declare function downloadFileStream(message: Api.Message, fileSize: number): AsyncGenerator<Buffer, void, unknown>;
 export declare function downloadThumbnail(message: Api.Message): Promise<Buffer | null>;
 export declare function createChannel(title: string): Promise<Api.Channel | null>;
 export declare function renameChannel(channelId: bigint, newTitle: string): Promise<boolean>;
