@@ -330,7 +330,7 @@ export async function downloadFileToBuffer(message) {
     }
     return null;
 }
-// Stream file in chunks (stateless stateless downloading using gram.js iterFile)
+// Stream file in chunks (stateless stateless downloading using gram.js iterFile with buffer fallback)
 export async function* downloadFileStream(message, fileSize) {
     if (!client || !client.connected)
         throw new Error('Not connected');
@@ -338,17 +338,30 @@ export async function* downloadFileStream(message, fileSize) {
     if (!media || !(media instanceof Api.MessageMediaDocument) || !media.document) {
         throw new Error('Message does not contain a valid document');
     }
-    // client.iterDownload yields Buffer chunks automatically
-    const fileIterator = client.iterDownload({
-        file: media,
-        limit: 512 * 1024, // Optimal chunk limit (512 KB)
-    });
-    for await (const chunk of fileIterator) {
-        if (Buffer.isBuffer(chunk)) {
-            yield chunk;
+    try {
+        // Attempt fast chunk-by-chunk iterator download
+        const fileIterator = client.iterDownload({
+            file: media,
+            requestSize: 512 * 1024,
+        });
+        for await (const chunk of fileIterator) {
+            if (Buffer.isBuffer(chunk)) {
+                yield chunk;
+            }
+            else if (typeof chunk === 'string') {
+                yield Buffer.from(chunk);
+            }
         }
-        else if (typeof chunk === 'string') {
-            yield Buffer.from(chunk);
+    }
+    catch (err) {
+        console.warn('iterDownload failed, falling back to downloadMedia buffer:', err);
+        // Fallback: download whole file buffer at once and yield it
+        const buffer = await client.downloadMedia(message);
+        if (Buffer.isBuffer(buffer)) {
+            yield buffer;
+        }
+        else if (typeof buffer === 'string') {
+            yield Buffer.from(buffer);
         }
     }
 }
