@@ -138,6 +138,9 @@ sharesRouter.post('/:shareId/download', async (req, res) => {
     res.setHeader('Content-Type', share.mimeType);
     res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(share.fileName)}"`);
     res.setHeader('Content-Length', share.fileSize.toString());
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
 
     // Stream chunks directly to client
     const stream = downloadFileStream(msgs[0] as Api.Message, share.fileSize);

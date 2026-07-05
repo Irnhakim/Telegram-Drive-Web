@@ -238,6 +238,9 @@ filesRouter.get('/:messageId/download', async (req, res) => {
     res.setHeader('Content-Type', info.mimeType);
     res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(info.name)}"`);
     res.setHeader('Content-Length', info.size.toString());
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
 
     // Stream chunks directly to client
     const stream = downloadFileStream(msg, info.size);
