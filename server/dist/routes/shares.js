@@ -29,7 +29,7 @@ sharesRouter.post('/generate', async (req, res) => {
             res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Required parameters missing' } });
             return;
         }
-        const shareId = crypto.randomBytes(16).toString('hex');
+        const shareId = crypto.randomBytes(6).toString('base64url');
         const expiresAt = expiresHours ? Math.floor(Date.now() / 1000) + (expiresHours * 3600) : undefined;
         createShareLink({
             id: shareId,

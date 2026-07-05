@@ -35,7 +35,7 @@ sharesRouter.post('/generate', async (req, res) => {
       return;
     }
 
-    const shareId = crypto.randomBytes(16).toString('hex');
+    const shareId = crypto.randomBytes(6).toString('base64url');
     const expiresAt = expiresHours ? Math.floor(Date.now() / 1000) + (expiresHours * 3600) : undefined;
 
     createShareLink({
