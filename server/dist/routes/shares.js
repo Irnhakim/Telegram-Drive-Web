@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import crypto from 'crypto';
 import { createShareLink, getShareLink, deleteShareLink } from '../db.js';
-import { getTelegramClient, downloadFileStream, getSavedMessages } from '../telegram.js';
+import { getTelegramClient, downloadFileStream, getSavedMessages, checkAuth } from '../telegram.js';
 import { getMimeType, formatFileSize } from '../utils.js';
 export const sharesRouter = Router();
 // Enable CORS for all public share endpoints
@@ -96,6 +96,8 @@ sharesRouter.get('/:shareId/download', async (req, res) => {
     try {
         const { shareId } = req.params;
         const password = req.query.password || '';
+        // Initialize and connect Telegram client if not already connected
+        await checkAuth();
         const share = getShareLink(shareId);
         if (!share) {
             res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Share link not found or expired' } });

@@ -66,7 +66,7 @@ const requireAccess = (req, res, next) => {
         next();
         return;
     }
-    const token = req.headers['x-access-token'];
+    const token = req.headers['x-access-token'] || req.query.token;
     if (token && validTokens.has(token)) {
         next();
         return;

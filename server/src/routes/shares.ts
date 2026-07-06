@@ -2,7 +2,7 @@ import { Router } from 'express';
 import crypto from 'crypto';
 import { Api } from 'telegram';
 import { createShareLink, getShareLink, deleteShareLink } from '../db.js';
-import { getTelegramClient, downloadFileToBuffer, downloadFileStream, getSavedMessages } from '../telegram.js';
+import { getTelegramClient, downloadFileToBuffer, downloadFileStream, getSavedMessages, checkAuth } from '../telegram.js';
 import { getMimeType, formatFileSize } from '../utils.js';
 
 export const sharesRouter = Router();
@@ -108,6 +108,9 @@ sharesRouter.get('/:shareId/download', async (req, res) => {
   try {
     const { shareId } = req.params;
     const password = (req.query.password as string) || '';
+
+    // Initialize and connect Telegram client if not already connected
+    await checkAuth();
 
     const share = getShareLink(shareId);
 

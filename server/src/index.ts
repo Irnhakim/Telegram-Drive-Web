@@ -77,7 +77,7 @@ const requireAccess: express.RequestHandler = (req, res, next) => {
     return;
   }
 
-  const token = req.headers['x-access-token'] as string;
+  const token = (req.headers['x-access-token'] as string) || (req.query.token as string);
   if (token && validTokens.has(token)) {
     next();
     return;
