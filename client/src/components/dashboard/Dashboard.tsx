@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import JSZip from 'jszip';
 import { foldersApi, filesApi } from '../../api/client';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
@@ -93,7 +94,45 @@ export function Dashboard({ user, onLogout, onAccessLogout }: DashboardProps) {
 
   // Handle file upload
   const handleUpload = useCallback(async (fileList: FileList) => {
-    const newUploads: UploadItem[] = Array.from(fileList).map((file) => ({
+    // 1. Group files by top-level folder name (if any have webkitRelativePath)
+    const filesToUpload: File[] = [];
+    const folderGroups: Record<string, File[]> = {};
+
+    for (const file of Array.from(fileList)) {
+      if (file.webkitRelativePath && file.webkitRelativePath.includes('/')) {
+        const folderName = file.webkitRelativePath.split('/')[0];
+        if (!folderGroups[folderName]) {
+          folderGroups[folderName] = [];
+        }
+        folderGroups[folderName].push(file);
+      } else {
+        filesToUpload.push(file);
+      }
+    }
+
+    // 2. Zip each folder group
+    for (const [folderName, folderFiles] of Object.entries(folderGroups)) {
+      try {
+        const zip = new JSZip();
+        for (const file of folderFiles) {
+          // Add file to zip using its full relative path
+          zip.file(file.webkitRelativePath, file);
+        }
+        const blob = await zip.generateAsync({ type: 'blob' });
+        const zippedFile = new File([blob], `${folderName}.zip`, {
+          type: 'application/zip',
+          lastModified: Date.now()
+        });
+        filesToUpload.push(zippedFile);
+      } catch (err) {
+        console.error(`Failed to zip folder "${folderName}":`, err);
+        // Fallback: upload files individually if zip creation fails
+        filesToUpload.push(...folderFiles);
+      }
+    }
+
+    // 3. Create upload queue items
+    const newUploads: UploadItem[] = filesToUpload.map((file) => ({
       id: `${Date.now()}-${Math.random().toString(36).substring(2)}`,
       file,
       progress: 0,
