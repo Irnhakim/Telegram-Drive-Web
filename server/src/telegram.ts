@@ -1,5 +1,6 @@
 import { TelegramClient, Api } from 'telegram';
 import { StringSession } from 'telegram/sessions/index.js';
+import { CustomFile } from 'telegram/client/uploads.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -356,8 +357,11 @@ export async function uploadFile(
 ): Promise<Api.Message> {
   if (!client || !client.connected) throw new Error('Not connected');
 
+  const size = fs.statSync(filePath).size;
+  const customFile = new CustomFile(fileName, size, filePath);
+
   const result = await client.sendFile(entity, {
-    file: filePath,
+    file: customFile,
     caption: '',
     forceDocument: true,
     workers: 4,
