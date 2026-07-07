@@ -1,6 +1,6 @@
-# Telegram Drive Web Server
+# Telegram Drive Web
 
-Telegram Drive Web Server is a self-hosted web-based port of [Telegram-Drive](https://github.com/caamer20/Telegram-Drive). It transforms your Telegram account into an unlimited, secure cloud storage drive, built with a **Node.js (Express + gram.js)** backend and a premium **React (Vite + TypeScript)** frontend.
+Telegram Drive Web is a self-hosted web-based port of [Telegram-Drive](https://github.com/caamer20/Telegram-Drive). It transforms your Telegram account into an unlimited, secure cloud storage drive, built with a **Node.js (Express + gram.js)** backend and a premium **React (Vite + TypeScript)** frontend.
 
 ## Features
 
