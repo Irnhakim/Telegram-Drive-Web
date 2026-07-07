@@ -112,3 +112,8 @@ To run client and server concurrently with hot reloading:
    npm run dev
    ```
 4. Access the development environment at `http://localhost:5173`.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](file:///d:/Programing/web/Telegram-Drive-WebServer/LICENSE) file for details.
+
