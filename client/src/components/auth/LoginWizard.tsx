@@ -23,14 +23,22 @@ export function LoginWizard({ onLogin }: LoginWizardProps) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [authSessionId, setAuthSessionId] = useState('');
+  const [resendCountdown, setResendCountdown] = useState(0);
   const pollingRef = useRef<any>(null);
 
-  // Clean up polling on unmount
+  // Clean up polling and countdown timers
   useEffect(() => {
+    let interval: any = null;
+    if (resendCountdown > 0) {
+      interval = setInterval(() => {
+        setResendCountdown((prev) => prev - 1);
+      }, 1000);
+    }
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
+      if (interval) clearInterval(interval);
     };
-  }, []);
+  }, [resendCountdown]);
 
   const validateConfig = () => {
     if (!apiId.trim() || !apiHash.trim()) {
@@ -62,9 +70,8 @@ export function LoginWizard({ onLogin }: LoginWizardProps) {
       pollingRef.current = setInterval(async () => {
         try {
           const check = await authApi.pollQRStatus(result.authSessionId);
-          if (check.status === 'success' && check.user && check.token) {
+          if (check.status === 'success' && check.user) {
             if (pollingRef.current) clearInterval(pollingRef.current);
-            localStorage.setItem('access_token', check.token);
             onLogin(check.user);
           } else if (check.status === 'requires2FA') {
             if (pollingRef.current) clearInterval(pollingRef.current);
@@ -98,9 +105,31 @@ export function LoginWizard({ onLogin }: LoginWizardProps) {
       const result = await authApi.sendCode(phone.trim(), authSessionId || undefined, apiId.trim(), apiHash.trim());
       setPhoneCodeHash(result.phoneCodeHash);
       setAuthSessionId(result.authSessionId);
+      setResendCountdown(60);
       setStep('code');
     } catch (err: any) {
       setError(err.message || 'Failed to send code');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    if (!phone.trim()) return;
+    if (!validateConfig()) return;
+
+    setLoading(true);
+    setError('');
+    setCode('');
+
+    try {
+      // Pass undefined to get a new TelegramClient session if the previous one expired
+      const result = await authApi.sendCode(phone.trim(), undefined, apiId.trim(), apiHash.trim());
+      setPhoneCodeHash(result.phoneCodeHash);
+      setAuthSessionId(result.authSessionId);
+      setResendCountdown(60);
+    } catch (err: any) {
+      setError(err.message || 'Failed to resend code');
     } finally {
       setLoading(false);
     }
@@ -117,8 +146,7 @@ export function LoginWizard({ onLogin }: LoginWizardProps) {
       const result = await authApi.verifyCode(authSessionId, phone, code.trim(), phoneCodeHash);
       if (result.requires2FA) {
         setStep('2fa');
-      } else if (result.success && result.user && result.token) {
-        localStorage.setItem('access_token', result.token);
+      } else if (result.success && result.user) {
         onLogin(result.user);
       }
     } catch (err: any) {
@@ -137,8 +165,7 @@ export function LoginWizard({ onLogin }: LoginWizardProps) {
 
     try {
       const result = await authApi.verify2FA(authSessionId, password2FA);
-      if (result.success && result.user && result.token) {
-        localStorage.setItem('access_token', result.token);
+      if (result.success && result.user) {
         onLogin(result.user);
       }
     } catch (err: any) {
@@ -450,6 +477,26 @@ export function LoginWizard({ onLogin }: LoginWizardProps) {
                     fontSize: '1.5rem', letterSpacing: '0.3em', fontWeight: 600,
                   }}
                 />
+              </div>
+
+              <div style={{ textAlign: 'center', marginBottom: '20px', fontSize: '0.8125rem' }}>
+                {resendCountdown > 0 ? (
+                  <span style={{ color: 'var(--text-muted)' }}>
+                    Kirim ulang kode dalam {resendCountdown}s
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleResendCode}
+                    disabled={loading}
+                    style={{
+                      background: 'none', border: 'none', color: 'var(--text-accent)',
+                      fontWeight: 600, cursor: 'pointer', outline: 'none', padding: 0
+                    }}
+                  >
+                    Kirim Ulang Kode OTP (Resend)
+                  </button>
+                )}
               </div>
 
               <div style={{ display: 'flex', gap: '12px' }}>

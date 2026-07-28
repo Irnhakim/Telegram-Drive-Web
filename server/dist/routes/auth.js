@@ -132,7 +132,17 @@ authRouter.post('/send-code', requireUserToken, async (req, res) => {
             res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Phone number is required' } });
             return;
         }
-        const result = await sendCode(userId, authSessionId ? String(authSessionId) : undefined, String(phoneNumber), apiId ? parseInt(apiId, 10) : undefined, apiHash ? String(apiHash) : undefined);
+        let formattedPhone = String(phoneNumber).trim().replace(/[^0-9+]/g, '');
+        if (formattedPhone.startsWith('0')) {
+            formattedPhone = '+62' + formattedPhone.substring(1);
+        }
+        else if (formattedPhone.startsWith('62') && !formattedPhone.startsWith('+')) {
+            formattedPhone = '+' + formattedPhone;
+        }
+        else if (!formattedPhone.startsWith('+')) {
+            formattedPhone = '+' + formattedPhone;
+        }
+        const result = await sendCode(userId, authSessionId ? String(authSessionId) : undefined, formattedPhone, apiId ? parseInt(apiId, 10) : undefined, apiHash ? String(apiHash) : undefined);
         res.json({
             success: true,
             authSessionId: result.authSessionId,
@@ -160,7 +170,17 @@ authRouter.post('/verify-code', requireUserToken, async (req, res) => {
             });
             return;
         }
-        const result = await verifyCode(userId, String(authSessionId), String(phoneNumber), String(code), String(phoneCodeHash));
+        let formattedPhone = String(phoneNumber).trim().replace(/[^0-9+]/g, '');
+        if (formattedPhone.startsWith('0')) {
+            formattedPhone = '+62' + formattedPhone.substring(1);
+        }
+        else if (formattedPhone.startsWith('62') && !formattedPhone.startsWith('+')) {
+            formattedPhone = '+' + formattedPhone;
+        }
+        else if (!formattedPhone.startsWith('+')) {
+            formattedPhone = '+' + formattedPhone;
+        }
+        const result = await verifyCode(userId, String(authSessionId), formattedPhone, String(code), String(phoneCodeHash));
         res.json(result);
     }
     catch (err) {
