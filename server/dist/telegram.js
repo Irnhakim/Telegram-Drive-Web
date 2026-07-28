@@ -4,63 +4,35 @@ import { CustomFile } from 'telegram/client/uploads.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import crypto from 'crypto';
+import { updateUserTelegramSession, getUserById, deleteUser } from './db.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DATA_DIR = path.resolve(__dirname, '../../data');
-const SESSION_FILE = path.join(DATA_DIR, 'session.txt');
-// Ensure data directory exists
-if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+// Active clients map: userId -> TelegramClient
+const activeClients = new Map();
+const pendingAuths = new Map();
+export function getActiveClient(userId) {
+    return activeClients.get(userId) || null;
 }
-let client = null;
-let phoneCodeHash = null;
-const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
-function loadConfig() {
-    try {
-        if (fs.existsSync(CONFIG_FILE)) {
-            return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf-8'));
+export async function getClientForUser(userId) {
+    let client = activeClients.get(userId);
+    if (client) {
+        if (!client.connected) {
+            await client.connect();
         }
+        return client;
     }
-    catch (e) {
-        console.warn('Failed to load local config:', e);
-    }
-    return {};
-}
-function saveConfig(update) {
-    try {
-        const current = loadConfig();
-        const next = { ...current, ...update };
-        fs.writeFileSync(CONFIG_FILE, JSON.stringify(next, null, 2), 'utf-8');
-    }
-    catch (e) {
-        console.error('Failed to save config:', e);
-    }
-}
-function clearConfig() {
-    try {
-        if (fs.existsSync(CONFIG_FILE)) {
-            fs.unlinkSync(CONFIG_FILE);
-        }
-    }
-    catch (e) {
-        console.error('Failed to clear config:', e);
-    }
-}
-export function getTelegramClient() {
-    return client;
-}
-export async function initClient(apiIdInput, apiHashInput) {
-    const conf = loadConfig();
-    const apiId = apiIdInput || conf.apiId || parseInt(process.env.TELEGRAM_API_ID || '', 10);
-    const apiHash = apiHashInput || conf.apiHash || process.env.TELEGRAM_API_HASH || '';
+    // Try loading from database
+    const user = getUserById(userId);
+    if (!user || !user.session)
+        return null;
+    const apiId = user.apiId || parseInt(process.env.TELEGRAM_API_ID || '', 10);
+    const apiHash = user.apiHash || process.env.TELEGRAM_API_HASH || '';
     if (!apiId || !apiHash) {
-        throw new Error('Telegram API ID and API Hash are required. Please configure them on the login page.');
+        throw new Error('Telegram API credentials missing for user');
     }
-    // Save the successfully parsed dynamic API credentials
-    if (apiIdInput && apiHashInput) {
-        saveConfig({ apiId, apiHash });
-    }
-    const session = new StringSession(conf.session || '');
+    const session = new StringSession(user.session);
     client = new TelegramClient(session, apiId, apiHash, {
         connectionRetries: 5,
         deviceModel: 'Telegram Drive Web',
@@ -68,22 +40,50 @@ export async function initClient(apiIdInput, apiHashInput) {
         appVersion: '1.0.0',
     });
     await client.connect();
+    activeClients.set(userId, client);
     return client;
 }
-// QR login structures
-let qrLoginSession = null;
-export async function sendQRToken(apiIdInput, apiHashInput) {
-    if (!client) {
-        await initClient(apiIdInput, apiHashInput);
+// Helper to create a new client for auth flow
+function createAuthClient(apiIdInput, apiHashInput) {
+    const apiId = apiIdInput || parseInt(process.env.TELEGRAM_API_ID || '', 10);
+    const apiHash = apiHashInput || process.env.TELEGRAM_API_HASH || '';
+    if (!apiId || !apiHash) {
+        throw new Error('Telegram API ID and API Hash are required to connect.');
     }
-    // Clean disconnect if already logging in
-    qrLoginSession = null;
-    const qr = await client.signIn({
+    const session = new StringSession('');
+    const client = new TelegramClient(session, apiId, apiHash, {
+        connectionRetries: 5,
+        deviceModel: 'Telegram Drive Web',
+        systemVersion: 'Web Server 1.0',
+        appVersion: '1.0.0',
+    });
+    return { client, apiId, apiHash };
+}
+// QR Login Auth Flow
+export async function sendQRToken(userId, authSessionIdInput, apiIdInput, apiHashInput) {
+    const authSessionId = authSessionIdInput || crypto.randomBytes(16).toString('hex');
+    let pending = pendingAuths.get(authSessionId);
+    if (pending) {
+        try {
+            await pending.client.disconnect();
+        }
+        catch { }
+    }
+    const { client, apiId, apiHash } = createAuthClient(apiIdInput, apiHashInput);
+    await client.connect();
+    pending = {
+        client,
+        apiId,
+        apiHash,
+        userId,
+    };
+    pendingAuths.set(authSessionId, pending);
+    const qrPromise = client.signIn({
         phoneNumber: async () => "",
         phoneCode: async () => "",
         password: async () => "",
         qrCode: async (token) => {
-            qrLoginSession = {
+            pending.qrSessionStatus = {
                 tokenUrl: `tg://login?token=${token.token.toString("base64url")}`,
                 expires: Date.now() + (token.expires * 1000),
                 status: "pending",
@@ -91,93 +91,153 @@ export async function sendQRToken(apiIdInput, apiHashInput) {
             };
         },
         onError: (err) => {
-            if (qrLoginSession) {
-                qrLoginSession.status = "error";
-                qrLoginSession.error = err.message;
+            if (pending && pending.qrSessionStatus) {
+                pending.qrSessionStatus.status = "error";
+                pending.qrSessionStatus.error = err.message;
             }
         }
     });
-    // Wait a maximum of 3s to let the qrCode callback fire and populate qrLoginSession
+    pending.qrLoginPromise = qrPromise;
+    // Wait briefly for the callback to fire
     let retries = 30;
-    while (!qrLoginSession && retries > 0) {
+    while (!pending.qrSessionStatus && retries > 0) {
         await new Promise((r) => setTimeout(r, 100));
         retries--;
     }
-    if (!qrLoginSession) {
+    if (!pending.qrSessionStatus) {
         throw new Error("Failed to initialize Telegram QR code login session");
     }
-    // Monitor login execution in the background asynchronously
+    // Handle completion in the background
     (async () => {
         try {
-            const user = await qr;
-            if (user && qrLoginSession) {
-                qrLoginSession.status = "success";
-                qrLoginSession.user = user;
-                // Save session on success
+            const user = await qrPromise;
+            if (user && pending) {
+                pending.qrSessionStatus.status = "success";
+                pending.qrSessionStatus.user = user;
+                // Save Telegram session to the user's account
                 const sessionStr = client.session.save();
-                saveConfig({ session: sessionStr });
+                const me = await client.getMe();
+                updateUserTelegramSession(pending.userId, {
+                    telegramId: me.id.toString(),
+                    telegramUsername: me.username,
+                    telegramFirstName: me.firstName,
+                    telegramLastName: me.lastName,
+                    telegramPhone: me.phone,
+                    session: sessionStr,
+                    apiId: pending.apiId,
+                    apiHash: pending.apiHash,
+                });
+                activeClients.set(pending.userId, client);
             }
         }
         catch (err) {
-            if (qrLoginSession) {
+            if (pending && pending.qrSessionStatus) {
                 if (err.errorMessage === 'SESSION_PASSWORD_NEEDED') {
-                    qrLoginSession.status = "requires2FA";
+                    pending.qrSessionStatus.status = "requires2FA";
                 }
                 else {
-                    qrLoginSession.status = "error";
-                    qrLoginSession.error = err.message || "Authentication rejected";
+                    pending.qrSessionStatus.status = "error";
+                    pending.qrSessionStatus.error = err.message || "Authentication rejected";
                 }
             }
         }
     })();
     return {
-        tokenUrl: qrLoginSession.tokenUrl,
-        expires: qrLoginSession.expires,
+        authSessionId,
+        tokenUrl: pending.qrSessionStatus.tokenUrl,
+        expires: pending.qrSessionStatus.expires,
     };
 }
-export async function checkQRStatus() {
-    if (!qrLoginSession) {
+export async function checkQRStatus(authSessionId) {
+    const pending = pendingAuths.get(authSessionId);
+    if (!pending || !pending.qrSessionStatus) {
         return { status: "not_started" };
     }
-    // Check if token expired
-    if (qrLoginSession.status === "pending" && Date.now() > qrLoginSession.expires) {
-        qrLoginSession.status = "expired";
+    if (pending.qrSessionStatus.status === "pending" && Date.now() > pending.qrSessionStatus.expires) {
+        pending.qrSessionStatus.status = "expired";
     }
-    return {
-        status: qrLoginSession.status,
-        user: qrLoginSession.user,
-        error: qrLoginSession.error,
+    const result = {
+        status: pending.qrSessionStatus.status,
+        error: pending.qrSessionStatus.error,
     };
-}
-export async function sendCode(phoneNumber, apiIdInput, apiHashInput) {
-    if (!client) {
-        await initClient(apiIdInput, apiHashInput);
+    if (pending.qrSessionStatus.status === "success" && pending.qrSessionStatus.user) {
+        const me = await pending.client.getMe();
+        result.user = {
+            id: me.id.toString(),
+            firstName: me.firstName,
+            lastName: me.lastName || '',
+            username: me.username || '',
+            phone: me.phone || '',
+        };
+        pendingAuths.delete(authSessionId);
     }
-    const conf = loadConfig();
-    const apiId = apiIdInput || conf.apiId || parseInt(process.env.TELEGRAM_API_ID || '', 10);
-    const apiHash = apiHashInput || conf.apiHash || process.env.TELEGRAM_API_HASH || '';
+    return result;
+}
+// SMS Login Flow
+export async function sendCode(userId, authSessionIdInput, phoneNumber, apiIdInput, apiHashInput) {
+    const authSessionId = authSessionIdInput || crypto.randomBytes(16).toString('hex');
+    let pending = pendingAuths.get(authSessionId);
+    if (pending) {
+        try {
+            await pending.client.disconnect();
+        }
+        catch { }
+    }
+    const { client, apiId, apiHash } = createAuthClient(apiIdInput, apiHashInput);
+    await client.connect();
     const result = await client.invoke(new Api.auth.SendCode({
         phoneNumber,
-        apiId: apiId,
-        apiHash: apiHash,
+        apiId,
+        apiHash,
         settings: new Api.CodeSettings({}),
     }));
-    phoneCodeHash = result.phoneCodeHash;
-    return { phoneCodeHash: phoneCodeHash };
+    const phoneCodeHash = result.phoneCodeHash;
+    pendingAuths.set(authSessionId, {
+        client,
+        phoneCodeHash,
+        apiId,
+        apiHash,
+        userId,
+    });
+    return { authSessionId, phoneCodeHash };
 }
-export async function verifyCode(phoneNumber, code, hash) {
-    if (!client)
-        throw new Error('Client not initialized');
+export async function verifyCode(userId, authSessionId, phoneNumber, code, hash) {
+    const pending = pendingAuths.get(authSessionId);
+    if (!pending)
+        throw new Error('Auth session not found or expired');
+    if (pending.userId !== userId)
+        throw new Error('Unauthorized session context');
     try {
-        await client.invoke(new Api.auth.SignIn({
+        await pending.client.invoke(new Api.auth.SignIn({
             phoneNumber,
             phoneCodeHash: hash,
             phoneCode: code,
         }));
-        // Save session on success
-        const sessionStr = client.session.save();
-        saveConfig({ session: sessionStr });
-        return { success: true };
+        // Success! Save Telegram session details to existing TeleDrive user
+        const sessionStr = pending.client.session.save();
+        const me = await pending.client.getMe();
+        updateUserTelegramSession(userId, {
+            telegramId: me.id.toString(),
+            telegramUsername: me.username,
+            telegramFirstName: me.firstName,
+            telegramLastName: me.lastName,
+            telegramPhone: me.phone,
+            session: sessionStr,
+            apiId: pending.apiId,
+            apiHash: pending.apiHash,
+        });
+        activeClients.set(userId, pending.client);
+        pendingAuths.delete(authSessionId);
+        return {
+            success: true,
+            user: {
+                id: me.id.toString(),
+                firstName: me.firstName,
+                lastName: me.lastName || '',
+                username: me.username || '',
+                phone: me.phone || '',
+            },
+        };
     }
     catch (err) {
         if (err.errorMessage === 'SESSION_PASSWORD_NEEDED') {
@@ -186,43 +246,49 @@ export async function verifyCode(phoneNumber, code, hash) {
         throw err;
     }
 }
-export async function verify2FA(password) {
-    if (!client)
-        throw new Error('Client not initialized');
-    const passwordInfo = await client.invoke(new Api.account.GetPassword());
+export async function verify2FA(userId, authSessionId, password) {
+    const pending = pendingAuths.get(authSessionId);
+    if (!pending)
+        throw new Error('Auth session not found or expired');
+    if (pending.userId !== userId)
+        throw new Error('Unauthorized session context');
+    const passwordInfo = await pending.client.invoke(new Api.account.GetPassword());
     const algo = passwordInfo.currentAlgo;
     if (!algo)
         throw new Error('No password algorithm found');
-    // Compute SRP password hash using the client.computePasswordSRP method, casting client to any
-    const result = await client.invoke(new Api.auth.CheckPassword({
-        password: await client.computePasswordSRP(passwordInfo, password)
+    const result = await pending.client.invoke(new Api.auth.CheckPassword({
+        password: await pending.client.computePasswordSRP(passwordInfo, password)
     }));
     if (result) {
-        const sessionStr = client.session.save();
-        saveConfig({ session: sessionStr });
-        return { success: true };
+        const sessionStr = pending.client.session.save();
+        const me = await pending.client.getMe();
+        updateUserTelegramSession(userId, {
+            telegramId: me.id.toString(),
+            telegramUsername: me.username,
+            telegramFirstName: me.firstName,
+            telegramLastName: me.lastName,
+            telegramPhone: me.phone,
+            session: sessionStr,
+            apiId: pending.apiId,
+            apiHash: pending.apiHash,
+        });
+        activeClients.set(userId, pending.client);
+        pendingAuths.delete(authSessionId);
+        return {
+            success: true,
+            user: {
+                id: me.id.toString(),
+                firstName: me.firstName,
+                lastName: me.lastName || '',
+                username: me.username || '',
+                phone: me.phone || '',
+            },
+        };
     }
     throw new Error('2FA verification failed');
 }
-export async function checkAuth() {
-    try {
-        if (!client) {
-            const conf = loadConfig();
-            if (!conf.session)
-                return false;
-            await initClient();
-        }
-        if (!client.connected) {
-            await client.connect();
-        }
-        const me = await client.getMe();
-        return !!me;
-    }
-    catch {
-        return false;
-    }
-}
-export async function logout() {
+export async function logout(userId) {
+    const client = activeClients.get(userId);
     try {
         if (client && client.connected) {
             await client.invoke(new Api.auth.LogOut());
@@ -232,29 +298,21 @@ export async function logout() {
         // ignore
     }
     finally {
-        client = null;
-        clearConfig();
+        activeClients.delete(userId);
+        deleteUser(userId);
     }
 }
-export async function getMe() {
-    if (!client || !client.connected)
-        return null;
+// Saved Messages entity (self)
+export async function getSavedMessages(client) {
     try {
-        const me = await client.getMe();
-        return me;
+        return (await client.getMe());
     }
     catch {
         return null;
     }
 }
-// Saved Messages entity (self)
-export async function getSavedMessages() {
-    return getMe();
-}
 // Get all user-created channels (used as folders)
-export async function getUserChannels() {
-    if (!client || !client.connected)
-        return [];
+export async function getUserChannels(client) {
     try {
         const dialogs = await client.getDialogs({ limit: 500 });
         const channels = [];
@@ -272,9 +330,7 @@ export async function getUserChannels() {
     }
 }
 // Get messages (files) from a dialog
-export async function getMessages(entity, options = {}) {
-    if (!client || !client.connected)
-        return { messages: [], total: 0 };
+export async function getMessages(client, entity, options = {}) {
     const { limit = 50, offsetId = 0, search = '' } = options;
     const result = await client.getMessages(entity, {
         limit,
@@ -286,9 +342,7 @@ export async function getMessages(entity, options = {}) {
     return { messages: fileMessages, total: result.total || fileMessages.length };
 }
 // Upload file to entity
-export async function uploadFile(entity, filePath, fileName) {
-    if (!client || !client.connected)
-        throw new Error('Not connected');
+export async function uploadFile(client, entity, filePath, fileName) {
     const size = fs.statSync(filePath).size;
     const customFile = new CustomFile(fileName, size, filePath);
     const result = await client.sendFile(entity, {
@@ -299,10 +353,8 @@ export async function uploadFile(entity, filePath, fileName) {
     });
     return result;
 }
-// Download file
-export async function downloadFile(message, outputPath, progressCallback) {
-    if (!client || !client.connected)
-        throw new Error('Not connected');
+// Download file to local path
+export async function downloadFile(client, message, outputPath, progressCallback) {
     const buffer = await client.downloadMedia(message, {
         progressCallback: (downloaded, total) => {
             if (progressCallback && total) {
@@ -321,9 +373,7 @@ export async function downloadFile(message, outputPath, progressCallback) {
     return outputPath;
 }
 // Download file to buffer (for streaming)
-export async function downloadFileToBuffer(message) {
-    if (!client || !client.connected)
-        throw new Error('Not connected');
+export async function downloadFileToBuffer(client, message) {
     const buffer = await client.downloadMedia(message);
     if (Buffer.isBuffer(buffer)) {
         return buffer;
@@ -333,16 +383,13 @@ export async function downloadFileToBuffer(message) {
     }
     return null;
 }
-// Stream file in chunks (stateless stateless downloading using gram.js iterFile with buffer fallback)
-export async function* downloadFileStream(message, fileSize) {
-    if (!client || !client.connected)
-        throw new Error('Not connected');
+// Stream file in chunks
+export async function* downloadFileStream(client, message, fileSize) {
     const media = message.media;
     if (!media || !(media instanceof Api.MessageMediaDocument) || !media.document) {
         throw new Error('Message does not contain a valid document');
     }
     try {
-        // Attempt fast chunk-by-chunk iterator download
         const fileIterator = client.iterDownload({
             file: media,
             requestSize: 512 * 1024,
@@ -358,7 +405,6 @@ export async function* downloadFileStream(message, fileSize) {
     }
     catch (err) {
         console.warn('iterDownload failed, falling back to downloadMedia buffer:', err);
-        // Fallback: download whole file buffer at once and yield it
         const buffer = await client.downloadMedia(message);
         if (Buffer.isBuffer(buffer)) {
             yield buffer;
@@ -369,9 +415,7 @@ export async function* downloadFileStream(message, fileSize) {
     }
 }
 // Download thumbnail
-export async function downloadThumbnail(message) {
-    if (!client || !client.connected)
-        return null;
+export async function downloadThumbnail(client, message) {
     try {
         const media = message.media;
         if (!media)
@@ -390,9 +434,7 @@ export async function downloadThumbnail(message) {
     }
 }
 // Create a new private channel (folder)
-export async function createChannel(title) {
-    if (!client || !client.connected)
-        return null;
+export async function createChannel(client, title) {
     try {
         const result = await client.invoke(new Api.channels.CreateChannel({
             title,
@@ -411,9 +453,7 @@ export async function createChannel(title) {
     }
 }
 // Rename a channel
-export async function renameChannel(channelId, newTitle) {
-    if (!client || !client.connected)
-        return false;
+export async function renameChannel(client, channelId, newTitle) {
     try {
         await client.invoke(new Api.channels.EditTitle({
             channel: channelId,
@@ -427,9 +467,7 @@ export async function renameChannel(channelId, newTitle) {
     }
 }
 // Delete a channel
-export async function deleteChannel(channelId) {
-    if (!client || !client.connected)
-        return false;
+export async function deleteChannel(client, channelId) {
     try {
         await client.invoke(new Api.channels.DeleteChannel({
             channel: channelId,
@@ -441,22 +479,18 @@ export async function deleteChannel(channelId) {
         return false;
     }
 }
-// Toggle channel publicity (Make Public / Private)
-export async function updateChannelPublicity(channelId, isPublic, username) {
-    if (!client || !client.connected)
-        return false;
+// Toggle channel publicity
+export async function updateChannelPublicity(client, channelId, isPublic, username) {
     try {
         if (isPublic) {
             if (!username)
                 throw new Error("Username is required to make a channel public");
-            // Update channel username to make it public
             await client.invoke(new Api.channels.UpdateUsername({
                 channel: channelId,
                 username: username,
             }));
         }
         else {
-            // Set username to empty to make it private
             await client.invoke(new Api.channels.UpdateUsername({
                 channel: channelId,
                 username: "",
@@ -470,9 +504,7 @@ export async function updateChannelPublicity(channelId, isPublic, username) {
     }
 }
 // Get channel invite link
-export async function getChannelInviteLink(channelId) {
-    if (!client || !client.connected)
-        return null;
+export async function getChannelInviteLink(client, channelId) {
     try {
         const result = await client.invoke(new Api.channels.GetFullChannel({
             channel: channelId,
@@ -483,7 +515,6 @@ export async function getChannelInviteLink(channelId) {
                 return fullChat.exportedInvite.link;
             }
         }
-        // Create new invite link if none exists
         const invite = await client.invoke(new Api.messages.ExportChatInvite({
             peer: channelId,
         }));
@@ -498,9 +529,7 @@ export async function getChannelInviteLink(channelId) {
     }
 }
 // Delete message(s)
-export async function deleteMessages(entity, messageIds) {
-    if (!client || !client.connected)
-        return false;
+export async function deleteMessages(client, entity, messageIds) {
     try {
         await client.deleteMessages(entity, messageIds, { revoke: true });
         return true;
@@ -511,9 +540,7 @@ export async function deleteMessages(entity, messageIds) {
     }
 }
 // Forward message (copy file to another folder)
-export async function forwardMessage(fromEntity, toEntity, messageId) {
-    if (!client || !client.connected)
-        return false;
+export async function forwardMessage(client, fromEntity, toEntity, messageId) {
     try {
         await client.forwardMessages(toEntity, {
             messages: [messageId],
@@ -527,9 +554,7 @@ export async function forwardMessage(fromEntity, toEntity, messageId) {
     }
 }
 // Edit message caption (rename file)
-export async function editCaption(entity, messageId, newCaption) {
-    if (!client || !client.connected)
-        return false;
+export async function editCaption(client, entity, messageId, newCaption) {
     try {
         await client.invoke(new Api.messages.EditMessage({
             peer: entity,

@@ -49,51 +49,47 @@ async function request<T>(
   return res.json();
 }
 
-// ── Access (web password) ─────────────────────────────
-export const accessApi = {
-  check: () => request<{ passwordRequired: boolean }>('/api/access/check'),
-
-  login: (password: string) =>
-    request<{ success: boolean; token: string }>('/api/access/login', {
-      method: 'POST',
-      body: JSON.stringify({ password }),
-    }),
-
-  logout: () =>
-    request<{ success: boolean }>('/api/access/logout', {
-      method: 'POST',
-    }),
-};
-
 // ── Auth (Telegram) ───────────────────────────────────
 export const authApi = {
   status: () => request<{ authenticated: boolean; user: any }>('/api/auth/status'),
 
-  sendCode: (phoneNumber: string, apiId?: string, apiHash?: string) =>
-    request<{ success: boolean; phoneCodeHash: string }>('/api/auth/send-code', {
+  login: (username: string, password: string) =>
+    request<{ success: boolean; token: string; user: any }>('/api/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ phoneNumber, apiId, apiHash }),
+      body: JSON.stringify({ username, password }),
     }),
 
-  verifyCode: (phoneNumber: string, code: string, phoneCodeHash: string) =>
-    request<{ success: boolean; requires2FA?: boolean; user?: any }>('/api/auth/verify-code', {
+  register: (username: string, password: string, email?: string) =>
+    request<{ success: boolean; token: string; user: any }>('/api/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ phoneNumber, code, phoneCodeHash }),
+      body: JSON.stringify({ username, password, email }),
     }),
 
-  startQR: (apiId?: string, apiHash?: string) =>
-    request<{ tokenUrl: string; expires: number }>('/api/auth/qr/start', {
+  sendCode: (phoneNumber: string, authSessionId?: string, apiId?: string, apiHash?: string) =>
+    request<{ success: boolean; authSessionId: string; phoneCodeHash: string }>('/api/auth/send-code', {
       method: 'POST',
-      body: JSON.stringify({ apiId, apiHash }),
+      body: JSON.stringify({ phoneNumber, authSessionId, apiId, apiHash }),
     }),
 
-  pollQRStatus: () =>
-    request<{ status: string; user?: any; error?: string }>('/api/auth/qr/status'),
-
-  verify2FA: (password: string) =>
-    request<{ success: boolean; user?: any }>('/api/auth/verify-2fa', {
+  verifyCode: (authSessionId: string, phoneNumber: string, code: string, phoneCodeHash: string) =>
+    request<{ success: boolean; requires2FA?: boolean; token?: string; user?: any }>('/api/auth/verify-code', {
       method: 'POST',
-      body: JSON.stringify({ password }),
+      body: JSON.stringify({ authSessionId, phoneNumber, code, phoneCodeHash }),
+    }),
+
+  startQR: (authSessionId?: string, apiId?: string, apiHash?: string) =>
+    request<{ authSessionId: string; tokenUrl: string; expires: number }>('/api/auth/qr/start', {
+      method: 'POST',
+      body: JSON.stringify({ authSessionId, apiId, apiHash }),
+    }),
+
+  pollQRStatus: (authSessionId: string) =>
+    request<{ status: string; user?: any; error?: string; token?: string }>(`/api/auth/qr/status?authSessionId=${authSessionId}`),
+
+  verify2FA: (authSessionId: string, password: string) =>
+    request<{ success: boolean; token?: string; user?: any }>('/api/auth/verify-2fa', {
+      method: 'POST',
+      body: JSON.stringify({ authSessionId, password }),
     }),
 
   logout: () =>

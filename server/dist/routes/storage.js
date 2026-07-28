@@ -3,9 +3,10 @@ import { getStorageStats } from '../db.js';
 import { formatFileSize } from '../utils.js';
 export const storageRouter = Router();
 // Storage statistics
-storageRouter.get('/stats', async (_req, res) => {
+storageRouter.get('/stats', async (req, res) => {
     try {
-        const stats = getStorageStats();
+        const userId = req.user.id;
+        const stats = getStorageStats(userId);
         res.json({
             total_storage_used_bytes: stats.totalSize,
             total_storage_used: formatFileSize(stats.totalSize),

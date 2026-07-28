@@ -3,10 +3,12 @@ import { getSavedMessages, getUserChannels, createChannel, renameChannel, delete
 import { cacheFolders } from '../db.js';
 export const foldersRouter = Router();
 // List all folders (Saved Messages + Channels)
-foldersRouter.get('/', async (_req, res) => {
+foldersRouter.get('/', async (req, res) => {
+    const client = req.telegramClient;
+    const userId = req.user.id;
     try {
-        const me = await getSavedMessages();
-        const channels = await getUserChannels();
+        const me = await getSavedMessages(client);
+        const channels = await getUserChannels(client);
         const folders = [];
         // Saved Messages always first
         if (me) {
@@ -25,7 +27,7 @@ foldersRouter.get('/', async (_req, res) => {
             });
         }
         // Cache folders
-        cacheFolders(folders.map((f) => ({
+        cacheFolders(userId, folders.map((f) => ({
             id: f.id,
             name: f.name,
             isSavedMessages: f.type === 'saved',
@@ -41,6 +43,7 @@ foldersRouter.get('/', async (_req, res) => {
 });
 // Create folder (private channel)
 foldersRouter.post('/', async (req, res) => {
+    const client = req.telegramClient;
     try {
         const { name } = req.body;
         if (!name) {
@@ -49,7 +52,7 @@ foldersRouter.post('/', async (req, res) => {
             });
             return;
         }
-        const channel = await createChannel(name);
+        const channel = await createChannel(client, name);
         if (!channel) {
             res.status(500).json({
                 error: { code: 'CREATE_FAILED', message: 'Failed to create folder' },
@@ -73,6 +76,7 @@ foldersRouter.post('/', async (req, res) => {
 });
 // Rename folder
 foldersRouter.patch('/:id', async (req, res) => {
+    const client = req.telegramClient;
     try {
         const { id } = req.params;
         const { name } = req.body;
@@ -88,7 +92,7 @@ foldersRouter.patch('/:id', async (req, res) => {
             });
             return;
         }
-        const success = await renameChannel(BigInt(id), name);
+        const success = await renameChannel(client, BigInt(id), name);
         if (!success) {
             res.status(500).json({
                 error: { code: 'RENAME_FAILED', message: 'Failed to rename folder' },
@@ -106,6 +110,7 @@ foldersRouter.patch('/:id', async (req, res) => {
 });
 // Delete folder
 foldersRouter.delete('/:id', async (req, res) => {
+    const client = req.telegramClient;
     try {
         const { id } = req.params;
         if (id === 'me') {
@@ -114,7 +119,7 @@ foldersRouter.delete('/:id', async (req, res) => {
             });
             return;
         }
-        const success = await deleteChannel(BigInt(id));
+        const success = await deleteChannel(client, BigInt(id));
         if (!success) {
             res.status(500).json({
                 error: { code: 'DELETE_FAILED', message: 'Failed to delete folder' },
@@ -132,6 +137,7 @@ foldersRouter.delete('/:id', async (req, res) => {
 });
 // Update folder publicity (Make Public/Private)
 foldersRouter.put('/:id/publicity', async (req, res) => {
+    const client = req.telegramClient;
     try {
         const { id } = req.params;
         const { isPublic, username } = req.body;
@@ -139,7 +145,7 @@ foldersRouter.put('/:id/publicity', async (req, res) => {
             res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Cannot modify Saved Messages publicity' } });
             return;
         }
-        const success = await updateChannelPublicity(BigInt(id), isPublic, username);
+        const success = await updateChannelPublicity(client, BigInt(id), isPublic, username);
         if (!success) {
             res.status(500).json({ error: { code: 'PUBLICITY_UPDATE_FAILED', message: 'Failed to update folder publicity' } });
             return;
@@ -153,13 +159,14 @@ foldersRouter.put('/:id/publicity', async (req, res) => {
 });
 // Get folder invite link
 foldersRouter.get('/:id/invite-link', async (req, res) => {
+    const client = req.telegramClient;
     try {
         const { id } = req.params;
         if (id === 'me') {
             res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Saved Messages does not have an invite link' } });
             return;
         }
-        const inviteLink = await getChannelInviteLink(BigInt(id));
+        const inviteLink = await getChannelInviteLink(client, BigInt(id));
         if (!inviteLink) {
             res.status(500).json({ error: { code: 'INVITE_LINK_FAILED', message: 'Failed to retrieve folder invite link' } });
             return;

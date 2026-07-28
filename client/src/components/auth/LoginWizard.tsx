@@ -22,6 +22,7 @@ export function LoginWizard({ onLogin }: LoginWizardProps) {
   const [qrLoading, setQrLoading] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [authSessionId, setAuthSessionId] = useState('');
   const pollingRef = useRef<any>(null);
 
   // Clean up polling on unmount
@@ -51,17 +52,19 @@ export function LoginWizard({ onLogin }: LoginWizardProps) {
     setError('');
 
     try {
-      const result = await authApi.startQR(apiId.trim(), apiHash.trim());
+      const result = await authApi.startQR(authSessionId || undefined, apiId.trim(), apiHash.trim());
       setQrUrl(result.tokenUrl);
+      setAuthSessionId(result.authSessionId);
       setQrLoading(false);
 
       // Start polling status
       if (pollingRef.current) clearInterval(pollingRef.current);
       pollingRef.current = setInterval(async () => {
         try {
-          const check = await authApi.pollQRStatus();
-          if (check.status === 'success' && check.user) {
+          const check = await authApi.pollQRStatus(result.authSessionId);
+          if (check.status === 'success' && check.user && check.token) {
             if (pollingRef.current) clearInterval(pollingRef.current);
+            localStorage.setItem('access_token', check.token);
             onLogin(check.user);
           } else if (check.status === 'requires2FA') {
             if (pollingRef.current) clearInterval(pollingRef.current);
@@ -92,8 +95,9 @@ export function LoginWizard({ onLogin }: LoginWizardProps) {
     setError('');
 
     try {
-      const result = await authApi.sendCode(phone.trim(), apiId.trim(), apiHash.trim());
+      const result = await authApi.sendCode(phone.trim(), authSessionId || undefined, apiId.trim(), apiHash.trim());
       setPhoneCodeHash(result.phoneCodeHash);
+      setAuthSessionId(result.authSessionId);
       setStep('code');
     } catch (err: any) {
       setError(err.message || 'Failed to send code');
@@ -110,10 +114,11 @@ export function LoginWizard({ onLogin }: LoginWizardProps) {
     setError('');
 
     try {
-      const result = await authApi.verifyCode(phone, code.trim(), phoneCodeHash);
+      const result = await authApi.verifyCode(authSessionId, phone, code.trim(), phoneCodeHash);
       if (result.requires2FA) {
         setStep('2fa');
-      } else if (result.success && result.user) {
+      } else if (result.success && result.user && result.token) {
+        localStorage.setItem('access_token', result.token);
         onLogin(result.user);
       }
     } catch (err: any) {
@@ -131,8 +136,9 @@ export function LoginWizard({ onLogin }: LoginWizardProps) {
     setError('');
 
     try {
-      const result = await authApi.verify2FA(password2FA);
-      if (result.success && result.user) {
+      const result = await authApi.verify2FA(authSessionId, password2FA);
+      if (result.success && result.user && result.token) {
+        localStorage.setItem('access_token', result.token);
         onLogin(result.user);
       }
     } catch (err: any) {

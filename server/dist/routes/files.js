@@ -4,7 +4,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { getTelegramClient, getMessages, getSavedMessages, uploadFile, downloadFileToBuffer, downloadFileStream, downloadThumbnail, deleteMessages, forwardMessage, editCaption, } from '../telegram.js';
+import { getSavedMessages, getMessages, uploadFile, downloadFileToBuffer, downloadFileStream, downloadThumbnail, deleteMessages, forwardMessage, editCaption, } from '../telegram.js';
 import { cacheFiles, cacheThumbnail, getCachedThumbnail, clearFileCache } from '../db.js';
 import { formatFileSize, getFileCategory } from '../utils.js';
 const __filename = fileURLToPath(import.meta.url);
@@ -17,15 +17,11 @@ if (!fs.existsSync(UPLOAD_DIR)) {
 const upload = multer({ dest: UPLOAD_DIR });
 export const filesRouter = Router();
 // Helper: resolve folder entity
-async function resolveEntity(folderId) {
-    const client = getTelegramClient();
-    if (!client)
-        return null;
+async function resolveEntity(client, folderId) {
     if (folderId === 'me' || !folderId) {
-        return await getSavedMessages() || 'me';
+        return await getSavedMessages(client) || 'me';
     }
     try {
-        // gram.js uses big-integer package for entity BigInt matching, let's cast to any to bypass strict compiler match
         const entity = await client.getEntity(BigInt(folderId));
         return entity;
     }
@@ -93,6 +89,8 @@ function extractFileInfo(msg, folderId) {
 }
 // List files in a folder
 filesRouter.get('/', async (req, res) => {
+    const client = req.telegramClient;
+    const userId = req.user.id;
     try {
         const folderId = req.query.folder_id || 'me';
         const limit = parseInt(req.query.limit) || 50;
@@ -100,14 +98,14 @@ filesRouter.get('/', async (req, res) => {
         const search = req.query.search || '';
         const sort = req.query.sort || '';
         const order = req.query.order || 'desc';
-        const entity = await resolveEntity(folderId);
+        const entity = await resolveEntity(client, folderId);
         if (!entity) {
             res.status(404).json({
                 error: { code: 'FOLDER_NOT_FOUND', message: 'Folder not found' },
             });
             return;
         }
-        const { messages, total } = await getMessages(entity, { limit, offsetId, search });
+        const { messages, total } = await getMessages(client, entity, { limit, offsetId, search });
         const files = messages.map((msg) => extractFileInfo(msg, folderId));
         // Sort if requested
         if (sort) {
@@ -123,7 +121,7 @@ filesRouter.get('/', async (req, res) => {
             });
         }
         // Cache files
-        cacheFiles(folderId, files.map((f) => ({
+        cacheFiles(userId, folderId, files.map((f) => ({
             messageId: f.id,
             name: f.name,
             size: f.size,
@@ -147,17 +145,13 @@ filesRouter.get('/', async (req, res) => {
 });
 // Get file details
 filesRouter.get('/:messageId', async (req, res) => {
+    const client = req.telegramClient;
     try {
         const { messageId } = req.params;
         const folderId = req.query.folder_id || 'me';
-        const entity = await resolveEntity(folderId);
+        const entity = await resolveEntity(client, folderId);
         if (!entity) {
             res.status(404).json({ error: { code: 'FOLDER_NOT_FOUND', message: 'Folder not found' } });
-            return;
-        }
-        const client = getTelegramClient();
-        if (!client) {
-            res.status(500).json({ error: { code: 'NOT_CONNECTED', message: 'Not connected' } });
             return;
         }
         const msgs = await client.getMessages(entity, { ids: [parseInt(messageId)] });
@@ -177,17 +171,13 @@ filesRouter.get('/:messageId', async (req, res) => {
 });
 // Download file
 filesRouter.get('/:messageId/download', async (req, res) => {
+    const client = req.telegramClient;
     try {
         const { messageId } = req.params;
         const folderId = req.query.folder_id || 'me';
-        const entity = await resolveEntity(folderId);
+        const entity = await resolveEntity(client, folderId);
         if (!entity) {
             res.status(404).json({ error: { code: 'FOLDER_NOT_FOUND', message: 'Folder not found' } });
-            return;
-        }
-        const client = getTelegramClient();
-        if (!client) {
-            res.status(500).json({ error: { code: 'NOT_CONNECTED', message: 'Not connected' } });
             return;
         }
         const msgs = await client.getMessages(entity, { ids: [parseInt(messageId)] });
@@ -204,7 +194,7 @@ filesRouter.get('/:messageId/download', async (req, res) => {
         res.setHeader('Cache-Control', 'no-cache, no-transform');
         res.setHeader('Connection', 'keep-alive');
         // Stream chunks directly to client
-        const stream = downloadFileStream(msg, info.size);
+        const stream = downloadFileStream(client, msg, info.size);
         for await (const chunk of stream) {
             res.write(chunk);
             // Abort if browser cancelled download early
@@ -224,26 +214,23 @@ filesRouter.get('/:messageId/download', async (req, res) => {
 });
 // Get thumbnail
 filesRouter.get('/:messageId/thumbnail', async (req, res) => {
+    const client = req.telegramClient;
+    const userId = req.user.id;
     try {
         const { messageId } = req.params;
         const folderId = req.query.folder_id || 'me';
         const msgId = parseInt(messageId);
         // Check cache first
-        const cached = getCachedThumbnail(msgId, folderId);
+        const cached = getCachedThumbnail(userId, msgId, folderId);
         if (cached) {
             res.setHeader('Content-Type', 'image/jpeg');
             res.setHeader('Cache-Control', 'public, max-age=86400');
             res.send(cached);
             return;
         }
-        const entity = await resolveEntity(folderId);
+        const entity = await resolveEntity(client, folderId);
         if (!entity) {
             res.status(404).json({ error: { code: 'FOLDER_NOT_FOUND', message: 'Folder not found' } });
-            return;
-        }
-        const client = getTelegramClient();
-        if (!client) {
-            res.status(500).json({ error: { code: 'NOT_CONNECTED', message: 'Not connected' } });
             return;
         }
         const msgs = await client.getMessages(entity, { ids: [msgId] });
@@ -251,13 +238,13 @@ filesRouter.get('/:messageId/thumbnail', async (req, res) => {
             res.status(404).json({ error: { code: 'FILE_NOT_FOUND', message: 'File not found' } });
             return;
         }
-        const thumbBuffer = await downloadThumbnail(msgs[0]);
+        const thumbBuffer = await downloadThumbnail(client, msgs[0]);
         if (!thumbBuffer) {
             res.status(404).json({ error: { code: 'NO_THUMBNAIL', message: 'No thumbnail available' } });
             return;
         }
         // Cache thumbnail
-        cacheThumbnail(msgId, folderId, thumbBuffer);
+        cacheThumbnail(userId, msgId, folderId, thumbBuffer);
         res.setHeader('Content-Type', 'image/jpeg');
         res.setHeader('Cache-Control', 'public, max-age=86400');
         res.send(thumbBuffer);
@@ -271,6 +258,8 @@ filesRouter.get('/:messageId/thumbnail', async (req, res) => {
 });
 // Upload file
 filesRouter.post('/upload', upload.single('file'), async (req, res) => {
+    const client = req.telegramClient;
+    const userId = req.user.id;
     try {
         const file = req.file;
         if (!file) {
@@ -278,20 +267,20 @@ filesRouter.post('/upload', upload.single('file'), async (req, res) => {
             return;
         }
         const folderId = req.body.folder_id || 'me';
-        const entity = await resolveEntity(folderId);
+        const entity = await resolveEntity(client, folderId);
         if (!entity) {
             res.status(404).json({ error: { code: 'FOLDER_NOT_FOUND', message: 'Folder not found' } });
             return;
         }
         const originalName = file.originalname || `upload_${Date.now()}`;
-        const result = await uploadFile(entity, file.path, originalName);
+        const result = await uploadFile(client, entity, file.path, originalName);
         // Clean up temp file
         try {
             fs.unlinkSync(file.path);
         }
         catch { /* ignore */ }
         // Clear file cache for this folder to force refresh
-        clearFileCache(folderId);
+        clearFileCache(userId, folderId);
         const info = extractFileInfo(result, folderId);
         res.json({
             success: true,
@@ -314,21 +303,23 @@ filesRouter.post('/upload', upload.single('file'), async (req, res) => {
 });
 // Delete file
 filesRouter.delete('/:messageId', async (req, res) => {
+    const client = req.telegramClient;
+    const userId = req.user.id;
     try {
         const { messageId } = req.params;
         const folderId = req.query.folder_id || 'me';
-        const entity = await resolveEntity(folderId);
+        const entity = await resolveEntity(client, folderId);
         if (!entity) {
             res.status(404).json({ error: { code: 'FOLDER_NOT_FOUND', message: 'Folder not found' } });
             return;
         }
-        const success = await deleteMessages(entity, [parseInt(messageId)]);
+        const success = await deleteMessages(client, entity, [parseInt(messageId)]);
         if (!success) {
             res.status(500).json({ error: { code: 'DELETE_FAILED', message: 'Failed to delete file' } });
             return;
         }
         // Clear file cache
-        clearFileCache(folderId);
+        clearFileCache(userId, folderId);
         res.json({ success: true });
     }
     catch (err) {
@@ -340,6 +331,8 @@ filesRouter.delete('/:messageId', async (req, res) => {
 });
 // Rename file (edit caption)
 filesRouter.patch('/:messageId', async (req, res) => {
+    const client = req.telegramClient;
+    const userId = req.user.id;
     try {
         const { messageId } = req.params;
         const { name } = req.body;
@@ -348,17 +341,17 @@ filesRouter.patch('/:messageId', async (req, res) => {
             res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'New name is required' } });
             return;
         }
-        const entity = await resolveEntity(folderId);
+        const entity = await resolveEntity(client, folderId);
         if (!entity) {
             res.status(404).json({ error: { code: 'FOLDER_NOT_FOUND', message: 'Folder not found' } });
             return;
         }
-        const success = await editCaption(entity, parseInt(messageId), name);
+        const success = await editCaption(client, entity, parseInt(messageId), name);
         if (!success) {
             res.status(500).json({ error: { code: 'RENAME_FAILED', message: 'Failed to rename file' } });
             return;
         }
-        clearFileCache(folderId);
+        clearFileCache(userId, folderId);
         res.json({ success: true });
     }
     catch (err) {
@@ -370,6 +363,8 @@ filesRouter.patch('/:messageId', async (req, res) => {
 });
 // Copy file to another folder
 filesRouter.post('/:messageId/copy', async (req, res) => {
+    const client = req.telegramClient;
+    const userId = req.user.id;
     try {
         const { messageId } = req.params;
         const { folder_id: targetFolderId, source_folder_id: sourceFolderId } = req.body;
@@ -377,18 +372,18 @@ filesRouter.post('/:messageId/copy', async (req, res) => {
             res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Target folder_id is required' } });
             return;
         }
-        const fromEntity = await resolveEntity(sourceFolderId || 'me');
-        const toEntity = await resolveEntity(targetFolderId);
+        const fromEntity = await resolveEntity(client, sourceFolderId || 'me');
+        const toEntity = await resolveEntity(client, targetFolderId);
         if (!fromEntity || !toEntity) {
             res.status(404).json({ error: { code: 'FOLDER_NOT_FOUND', message: 'Folder not found' } });
             return;
         }
-        const success = await forwardMessage(fromEntity, toEntity, parseInt(messageId));
+        const success = await forwardMessage(client, fromEntity, toEntity, parseInt(messageId));
         if (!success) {
             res.status(500).json({ error: { code: 'COPY_FAILED', message: 'Failed to copy file' } });
             return;
         }
-        clearFileCache(targetFolderId);
+        clearFileCache(userId, targetFolderId);
         res.json({ success: true });
     }
     catch (err) {
@@ -400,6 +395,8 @@ filesRouter.post('/:messageId/copy', async (req, res) => {
 });
 // Bulk operations (delete, move)
 filesRouter.post('/bulk', async (req, res) => {
+    const client = req.telegramClient;
+    const userId = req.user.id;
     try {
         const { action, file_ids, folder_id, payload } = req.body;
         const folderId = folder_id || 'me';
@@ -409,33 +406,33 @@ filesRouter.post('/bulk', async (req, res) => {
             });
             return;
         }
-        const entity = await resolveEntity(folderId);
+        const entity = await resolveEntity(client, folderId);
         if (!entity) {
             res.status(404).json({ error: { code: 'FOLDER_NOT_FOUND', message: 'Folder not found' } });
             return;
         }
         if (action === 'delete') {
-            const success = await deleteMessages(entity, file_ids);
-            clearFileCache(folderId);
+            const success = await deleteMessages(client, entity, file_ids);
+            clearFileCache(userId, folderId);
             res.json({ success, deleted: file_ids.length });
         }
         else if (action === 'move' && payload?.folder_id) {
-            const toEntity = await resolveEntity(payload.folder_id);
+            const toEntity = await resolveEntity(client, payload.folder_id);
             if (!toEntity) {
                 res.status(404).json({ error: { code: 'FOLDER_NOT_FOUND', message: 'Target folder not found' } });
                 return;
             }
             let moved = 0;
             for (const fid of file_ids) {
-                const ok = await forwardMessage(entity, toEntity, fid);
+                const ok = await forwardMessage(client, entity, toEntity, fid);
                 if (ok)
                     moved++;
             }
             // Delete from source after moving
             if (moved > 0) {
-                await deleteMessages(entity, file_ids);
-                clearFileCache(folderId);
-                clearFileCache(payload.folder_id);
+                await deleteMessages(client, entity, file_ids);
+                clearFileCache(userId, folderId);
+                clearFileCache(userId, payload.folder_id);
             }
             res.json({ success: true, moved });
         }
@@ -455,6 +452,8 @@ filesRouter.post('/bulk', async (req, res) => {
 import * as archiverModule from 'archiver';
 // Bulk download ZIP stream (PUBLIC/AUTHENTICATED)
 filesRouter.post('/bulk-download', async (req, res) => {
+    const client = req.telegramClient;
+    const userId = req.user.id;
     try {
         const { file_ids, folder_id } = req.body;
         const folderId = folder_id || 'me';
@@ -462,14 +461,9 @@ filesRouter.post('/bulk-download', async (req, res) => {
             res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'file_ids array is required' } });
             return;
         }
-        const entity = await resolveEntity(folderId);
+        const entity = await resolveEntity(client, folderId);
         if (!entity) {
             res.status(404).json({ error: { code: 'FOLDER_NOT_FOUND', message: 'Folder not found' } });
-            return;
-        }
-        const client = getTelegramClient();
-        if (!client) {
-            res.status(500).json({ error: { code: 'NOT_CONNECTED', message: 'Not connected' } });
             return;
         }
         // Set response headers for zip file stream
@@ -480,7 +474,6 @@ filesRouter.post('/bulk-download', async (req, res) => {
         // Handle errors from archive packing
         archive.on('error', (err) => {
             console.error('ZIP packing error:', err);
-            // If headers are already sent, we cannot send custom json error
             if (!res.headersSent) {
                 res.status(500).send('Failed to package files');
             }
@@ -493,7 +486,7 @@ filesRouter.post('/bulk-download', async (req, res) => {
                 if (msgs && msgs.length > 0 && msgs[0]) {
                     const msg = msgs[0];
                     const info = extractFileInfo(msg, folderId);
-                    const buffer = await downloadFileToBuffer(msg);
+                    const buffer = await downloadFileToBuffer(client, msg);
                     if (buffer) {
                         archive.append(buffer, { name: info.name });
                     }
@@ -501,7 +494,6 @@ filesRouter.post('/bulk-download', async (req, res) => {
             }
             catch (e) {
                 console.error('Error adding file to zip:', fid, e);
-                // Continue downloading remaining files even if one fails
             }
         }
         await archive.finalize();

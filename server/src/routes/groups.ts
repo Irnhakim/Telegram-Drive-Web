@@ -6,8 +6,9 @@ export const groupsRouter = Router();
 
 // GET all groups
 groupsRouter.get('/', (req, res) => {
+  const userId = (req as any).user.id;
   try {
-    const list = getGroups();
+    const list = getGroups(userId);
     res.json({ success: true, groups: list });
   } catch (err: any) {
     res.status(500).json({ error: { code: 'DB_ERROR', message: err.message } });
@@ -16,6 +17,7 @@ groupsRouter.get('/', (req, res) => {
 
 // CREATE group
 groupsRouter.post('/', (req, res) => {
+  const userId = (req as any).user.id;
   try {
     const { name, color } = req.body;
     if (!name || !color) {
@@ -24,7 +26,7 @@ groupsRouter.post('/', (req, res) => {
     }
 
     const groupId = crypto.randomBytes(8).toString('hex');
-    createGroup(groupId, name, color);
+    createGroup(userId, groupId, name, color);
 
     res.json({
       success: true,
@@ -37,9 +39,10 @@ groupsRouter.post('/', (req, res) => {
 
 // DELETE group
 groupsRouter.delete('/:groupId', (req, res) => {
+  const userId = (req as any).user.id;
   try {
     const { groupId } = req.params;
-    deleteGroup(groupId);
+    deleteGroup(userId, groupId);
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: { code: 'DB_ERROR', message: err.message } });
@@ -48,11 +51,12 @@ groupsRouter.delete('/:groupId', (req, res) => {
 
 // ASSIGN folder to group
 groupsRouter.post('/folders/:folderId', (req, res) => {
+  const userId = (req as any).user.id;
   try {
     const { folderId } = req.params;
     const { groupId } = req.body; // can be null to unassign
 
-    updateFolderGroup(folderId, groupId || null);
+    updateFolderGroup(userId, folderId, groupId || null);
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: { code: 'DB_ERROR', message: err.message } });

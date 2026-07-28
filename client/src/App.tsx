@@ -1,17 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
-import { accessApi, authApi, setAccessToken, clearAccessToken } from './api/client';
-import { AccessGate } from './components/auth/AccessGate';
+import { authApi, clearAccessToken } from './api/client';
+import { WebAuth } from './components/auth/WebAuth';
 import { LoginWizard } from './components/auth/LoginWizard';
 import { Dashboard } from './components/dashboard/Dashboard';
 import { ShareDownload } from './components/shared/ShareDownload';
 import type { UserInfo } from './types';
 
-type AppState = 'loading' | 'access-gate' | 'login' | 'dashboard' | 'public-share';
+type AppState = 'loading' | 'login' | 'link-telegram' | 'dashboard' | 'public-share';
 
 function App() {
   const [state, setState] = useState<AppState>('loading');
-  const [user, setUser] = useState<UserInfo | null>(null);
-  const [passwordRequired, setPasswordRequired] = useState(false);
+  const [user, setUser] = useState<(UserInfo & { telegramConnected?: boolean }) | null>(null);
   const [shareId, setShareId] = useState<string | null>(null);
 
   // Check initial state
@@ -26,56 +25,34 @@ function App() {
         return;
       }
     }
+    
     const init = async () => {
-      try {
-        // 1. Check if access password is required
-        const accessCheck = await accessApi.check();
-        setPasswordRequired(accessCheck.passwordRequired);
-
-        // 2. If we have a stored token, check if Telegram is authed
-        const token = localStorage.getItem('access_token');
-        if (token || !accessCheck.passwordRequired) {
-          // If no password required, get a token
-          if (!token && !accessCheck.passwordRequired) {
-            const result = await accessApi.login('');
-            setAccessToken(result.token);
+      const token = localStorage.getItem('access_token');
+      if (token) {
+        try {
+          const authStatus = await authApi.status();
+          if (authStatus.authenticated && authStatus.user) {
+            setUser(authStatus.user);
+            setState(authStatus.user.telegramConnected ? 'dashboard' : 'link-telegram');
+            return;
           }
-
-          try {
-            const authStatus = await authApi.status();
-            if (authStatus.authenticated && authStatus.user) {
-              setUser(authStatus.user);
-              setState('dashboard');
-              return;
-            }
-          } catch {
-            // Token might be invalid
-          }
-          setState(accessCheck.passwordRequired && !token ? 'access-gate' : 'login');
-        } else {
-          setState('access-gate');
+        } catch {
+          // Token might be invalid
+          clearAccessToken();
         }
-      } catch {
-        setState('access-gate');
       }
+      setState('login');
     };
     init();
   }, []);
 
-  const handleAccessLogin = useCallback(() => {
-    // After access password verified, check Telegram auth
-    authApi.status().then((res) => {
-      if (res.authenticated && res.user) {
-        setUser(res.user);
-        setState('dashboard');
-      } else {
-        setState('login');
-      }
-    }).catch(() => setState('login'));
+  const handleWebAuthSuccess = useCallback((userInfo: UserInfo & { telegramConnected: boolean }) => {
+    setUser(userInfo);
+    setState(userInfo.telegramConnected ? 'dashboard' : 'link-telegram');
   }, []);
 
-  const handleTelegramLogin = useCallback((loggedInUser: UserInfo) => {
-    setUser(loggedInUser);
+  const handleTelegramLogin = useCallback(() => {
+    setUser((prev: any) => prev ? { ...prev, telegramConnected: true } : null);
     setState('dashboard');
   }, []);
 
@@ -83,14 +60,9 @@ function App() {
     try {
       await authApi.logout();
     } catch { /* ignore */ }
-    setUser(null);
-    setState('login');
-  }, []);
-
-  const handleAccessLogout = useCallback(() => {
     clearAccessToken();
     setUser(null);
-    setState('access-gate');
+    setState('login');
   }, []);
 
   // Loading splash
@@ -109,13 +81,13 @@ function App() {
     );
   }
 
-  // Access gate (web password)
-  if (state === 'access-gate') {
-    return <AccessGate onSuccess={handleAccessLogin} />;
+  // TeleDrive Login/Register
+  if (state === 'login') {
+    return <WebAuth onAuthSuccess={handleWebAuthSuccess} />;
   }
 
-  // Telegram login
-  if (state === 'login') {
+  // Telegram Linking Wizard
+  if (state === 'link-telegram') {
     return <LoginWizard onLogin={handleTelegramLogin} />;
   }
 
@@ -129,7 +101,6 @@ function App() {
     <Dashboard
       user={user}
       onLogout={handleLogout}
-      onAccessLogout={passwordRequired ? handleAccessLogout : undefined}
     />
   );
 }

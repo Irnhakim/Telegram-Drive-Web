@@ -8,15 +8,18 @@ import {
   updateChannelPublicity,
   getChannelInviteLink,
 } from '../telegram.js';
-import { cacheFolders, getCachedFolders } from '../db.js';
+import { cacheFolders } from '../db.js';
 
 export const foldersRouter = Router();
 
 // List all folders (Saved Messages + Channels)
-foldersRouter.get('/', async (_req, res) => {
+foldersRouter.get('/', async (req, res) => {
+  const client = (req as any).telegramClient;
+  const userId = (req as any).user.id;
+
   try {
-    const me = await getSavedMessages();
-    const channels = await getUserChannels();
+    const me = await getSavedMessages(client);
+    const channels = await getUserChannels(client);
 
     const folders: Array<{
       id: string;
@@ -45,6 +48,7 @@ foldersRouter.get('/', async (_req, res) => {
 
     // Cache folders
     cacheFolders(
+      userId,
       folders.map((f) => ({
         id: f.id,
         name: f.name,
@@ -63,6 +67,8 @@ foldersRouter.get('/', async (_req, res) => {
 
 // Create folder (private channel)
 foldersRouter.post('/', async (req, res) => {
+  const client = (req as any).telegramClient;
+
   try {
     const { name } = req.body;
     if (!name) {
@@ -72,7 +78,7 @@ foldersRouter.post('/', async (req, res) => {
       return;
     }
 
-    const channel = await createChannel(name);
+    const channel = await createChannel(client, name);
     if (!channel) {
       res.status(500).json({
         error: { code: 'CREATE_FAILED', message: 'Failed to create folder' },
@@ -97,6 +103,8 @@ foldersRouter.post('/', async (req, res) => {
 
 // Rename folder
 foldersRouter.patch('/:id', async (req, res) => {
+  const client = (req as any).telegramClient;
+
   try {
     const { id } = req.params;
     const { name } = req.body;
@@ -115,7 +123,7 @@ foldersRouter.patch('/:id', async (req, res) => {
       return;
     }
 
-    const success = await renameChannel(BigInt(id), name);
+    const success = await renameChannel(client, BigInt(id), name);
     if (!success) {
       res.status(500).json({
         error: { code: 'RENAME_FAILED', message: 'Failed to rename folder' },
@@ -134,6 +142,8 @@ foldersRouter.patch('/:id', async (req, res) => {
 
 // Delete folder
 foldersRouter.delete('/:id', async (req, res) => {
+  const client = (req as any).telegramClient;
+
   try {
     const { id } = req.params;
 
@@ -144,7 +154,7 @@ foldersRouter.delete('/:id', async (req, res) => {
       return;
     }
 
-    const success = await deleteChannel(BigInt(id));
+    const success = await deleteChannel(client, BigInt(id));
     if (!success) {
       res.status(500).json({
         error: { code: 'DELETE_FAILED', message: 'Failed to delete folder' },
@@ -163,6 +173,8 @@ foldersRouter.delete('/:id', async (req, res) => {
 
 // Update folder publicity (Make Public/Private)
 foldersRouter.put('/:id/publicity', async (req, res) => {
+  const client = (req as any).telegramClient;
+
   try {
     const { id } = req.params;
     const { isPublic, username } = req.body;
@@ -172,7 +184,7 @@ foldersRouter.put('/:id/publicity', async (req, res) => {
       return;
     }
 
-    const success = await updateChannelPublicity(BigInt(id), isPublic, username);
+    const success = await updateChannelPublicity(client, BigInt(id), isPublic, username);
     if (!success) {
       res.status(500).json({ error: { code: 'PUBLICITY_UPDATE_FAILED', message: 'Failed to update folder publicity' } });
       return;
@@ -187,6 +199,8 @@ foldersRouter.put('/:id/publicity', async (req, res) => {
 
 // Get folder invite link
 foldersRouter.get('/:id/invite-link', async (req, res) => {
+  const client = (req as any).telegramClient;
+
   try {
     const { id } = req.params;
 
@@ -195,7 +209,7 @@ foldersRouter.get('/:id/invite-link', async (req, res) => {
       return;
     }
 
-    const inviteLink = await getChannelInviteLink(BigInt(id));
+    const inviteLink = await getChannelInviteLink(client, BigInt(id));
     if (!inviteLink) {
       res.status(500).json({ error: { code: 'INVITE_LINK_FAILED', message: 'Failed to retrieve folder invite link' } });
       return;

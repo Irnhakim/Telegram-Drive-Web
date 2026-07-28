@@ -1,23 +1,131 @@
 import { Router } from 'express';
+import crypto from 'crypto';
 import {
-  initClient,
   sendCode,
   verifyCode,
   verify2FA,
-  checkAuth,
   logout,
-  getMe,
   sendQRToken,
   checkQRStatus,
 } from '../telegram.js';
+import {
+  registerUser,
+  getUserByUsername,
+  verifyPassword,
+  updateUserWebToken,
+  hashPassword,
+} from '../db.js';
+import { requireUserToken } from '../middleware/auth.js';
 
 export const authRouter = Router();
 
-// Start QR Code Auth Session
-authRouter.post('/qr/start', async (req, res) => {
+// ── Public Web Account Authentication Routes ───────────────────────────
+
+// TeleDrive Account Registration
+authRouter.post('/register', async (req, res) => {
   try {
-    const { apiId, apiHash } = req.body;
-    const result = await sendQRToken(apiId ? parseInt(apiId, 10) : undefined, apiHash);
+    const { username, password, email } = req.body;
+    if (!username || !password) {
+      res.status(400).json({
+        error: { code: 'BAD_REQUEST', message: 'Username and password are required' },
+      });
+      return;
+    }
+
+    if (username.length < 3 || password.length < 6) {
+      res.status(400).json({
+        error: {
+          code: 'BAD_REQUEST',
+          message: 'Username must be at least 3 chars, password at least 6 chars',
+        },
+      });
+      return;
+    }
+
+    const existing = getUserByUsername(username);
+    if (existing) {
+      res.status(400).json({
+        error: { code: 'USERNAME_EXISTS', message: 'Username is already taken' },
+      });
+      return;
+    }
+
+    const passwordHash = hashPassword(password);
+    const user = registerUser(username, passwordHash, email);
+
+    res.json({
+      success: true,
+      token: user.token,
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email || '',
+        telegramConnected: false,
+      },
+    });
+  } catch (err: any) {
+    console.error('Registration error:', err);
+    res.status(500).json({
+      error: { code: 'REGISTRATION_FAILED', message: err.message || 'Failed to register account' },
+    });
+  }
+});
+
+// TeleDrive Account Login
+authRouter.post('/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    if (!username || !password) {
+      res.status(400).json({
+        error: { code: 'BAD_REQUEST', message: 'Username and password are required' },
+      });
+      return;
+    }
+
+    const user = getUserByUsername(username);
+    if (!user || !verifyPassword(password, user.passwordHash)) {
+      res.status(401).json({
+        error: { code: 'INVALID_CREDENTIALS', message: 'Invalid username or password' },
+      });
+      return;
+    }
+
+    // Refresh web access token upon login
+    const newToken = crypto.randomBytes(32).toString('hex');
+    updateUserWebToken(user.id, newToken);
+    user.token = newToken;
+
+    res.json({
+      success: true,
+      token: user.token,
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email || '',
+        telegramConnected: !!user.session,
+      },
+    });
+  } catch (err: any) {
+    console.error('Login error:', err);
+    res.status(500).json({
+      error: { code: 'LOGIN_FAILED', message: err.message || 'Failed to login' },
+    });
+  }
+});
+
+// ── Protected Telegram Auth Routing ────────────────────────────────────
+
+// Start QR Code Auth Session
+authRouter.post('/qr/start', requireUserToken, async (req, res) => {
+  const userId = (req as any).user.id;
+  try {
+    const { apiId, apiHash, authSessionId } = req.body;
+    const result = await sendQRToken(
+      userId,
+      authSessionId ? String(authSessionId) : undefined,
+      apiId ? parseInt(apiId, 10) : undefined,
+      apiHash ? String(apiHash) : undefined
+    );
     res.json(result);
   } catch (err: any) {
     console.error('QR Start error:', err);
@@ -28,26 +136,16 @@ authRouter.post('/qr/start', async (req, res) => {
 });
 
 // Poll QR Auth Status
-authRouter.get('/qr/status', async (_req, res) => {
+authRouter.get('/qr/status', requireUserToken, async (req, res) => {
   try {
-    const statusResult = await checkQRStatus();
-    if (statusResult.status === 'success' && statusResult.user) {
-      const me = await getMe();
-      res.json({
-        status: 'success',
-        user: me
-          ? {
-              id: me.id?.toString(),
-              firstName: me.firstName,
-              lastName: me.lastName || '',
-              username: me.username || '',
-              phone: me.phone || '',
-            }
-          : null,
-      });
-    } else {
-      res.json(statusResult);
+    const authSessionId = req.query.authSessionId as string;
+    if (!authSessionId) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'authSessionId is required' } });
+      return;
     }
+
+    const statusResult = await checkQRStatus(authSessionId);
+    res.json(statusResult);
   } catch (err: any) {
     res.status(500).json({
       error: { code: 'QR_STATUS_FAILED', message: err.message },
@@ -55,47 +153,36 @@ authRouter.get('/qr/status', async (_req, res) => {
   }
 });
 
-// Check authentication status
-authRouter.get('/status', async (_req, res) => {
+// Send verification code (SMS)
+authRouter.post('/send-code', requireUserToken, async (req, res) => {
+  const userId = (req as any).user.id;
   try {
-    const isAuth = await checkAuth();
-    if (isAuth) {
-      const me = await getMe();
-      res.json({
-        authenticated: true,
-        user: me
-          ? {
-              id: me.id?.toString(),
-              firstName: me.firstName,
-              lastName: me.lastName || '',
-              username: me.username || '',
-              phone: me.phone || '',
-            }
-          : null,
-      });
-    } else {
-      res.json({ authenticated: false, user: null });
-    }
-  } catch (err: any) {
-    res.json({ authenticated: false, user: null, error: err.message });
-  }
-});
-
-// Send verification code
-authRouter.post('/send-code', async (req, res) => {
-  try {
-    const { phoneNumber, apiId, apiHash } = req.body;
+    const { phoneNumber, apiId, apiHash, authSessionId } = req.body;
     if (!phoneNumber) {
       res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Phone number is required' } });
       return;
     }
 
-    // Initialize client dynamically
-    await initClient(apiId ? parseInt(apiId, 10) : undefined, apiHash);
-    const result = await sendCode(phoneNumber, apiId ? parseInt(apiId, 10) : undefined, apiHash);
+    let formattedPhone = String(phoneNumber).trim().replace(/[^0-9+]/g, '');
+    if (formattedPhone.startsWith('0')) {
+      formattedPhone = '+62' + formattedPhone.substring(1);
+    } else if (formattedPhone.startsWith('62') && !formattedPhone.startsWith('+')) {
+      formattedPhone = '+' + formattedPhone;
+    } else if (!formattedPhone.startsWith('+')) {
+      formattedPhone = '+' + formattedPhone;
+    }
+
+    const result = await sendCode(
+      userId,
+      authSessionId ? String(authSessionId) : undefined,
+      formattedPhone,
+      apiId ? parseInt(apiId, 10) : undefined,
+      apiHash ? String(apiHash) : undefined
+    );
 
     res.json({
       success: true,
+      authSessionId: result.authSessionId,
       phoneCodeHash: result.phoneCodeHash,
     });
   } catch (err: any) {
@@ -110,36 +197,35 @@ authRouter.post('/send-code', async (req, res) => {
 });
 
 // Verify code
-authRouter.post('/verify-code', async (req, res) => {
+authRouter.post('/verify-code', requireUserToken, async (req, res) => {
+  const userId = (req as any).user.id;
   try {
-    const { phoneNumber, code, phoneCodeHash } = req.body;
-    if (!phoneNumber || !code || !phoneCodeHash) {
+    const { authSessionId, phoneNumber, code, phoneCodeHash } = req.body;
+    if (!authSessionId || !phoneNumber || !code || !phoneCodeHash) {
       res.status(400).json({
-        error: { code: 'BAD_REQUEST', message: 'Phone number, code and phoneCodeHash are required' },
+        error: { code: 'BAD_REQUEST', message: 'authSessionId, phone, code and phoneCodeHash are required' },
       });
       return;
     }
 
-    const result = await verifyCode(phoneNumber, code, phoneCodeHash);
-
-    if (result.requires2FA) {
-      res.json({ success: false, requires2FA: true });
-      return;
+    let formattedPhone = String(phoneNumber).trim().replace(/[^0-9+]/g, '');
+    if (formattedPhone.startsWith('0')) {
+      formattedPhone = '+62' + formattedPhone.substring(1);
+    } else if (formattedPhone.startsWith('62') && !formattedPhone.startsWith('+')) {
+      formattedPhone = '+' + formattedPhone;
+    } else if (!formattedPhone.startsWith('+')) {
+      formattedPhone = '+' + formattedPhone;
     }
 
-    const me = await getMe();
-    res.json({
-      success: true,
-      user: me
-        ? {
-            id: me.id?.toString(),
-            firstName: me.firstName,
-            lastName: me.lastName || '',
-            username: me.username || '',
-            phone: me.phone || '',
-          }
-        : null,
-    });
+    const result = await verifyCode(
+      userId,
+      String(authSessionId),
+      formattedPhone,
+      String(code),
+      String(phoneCodeHash)
+    );
+
+    res.json(result);
   } catch (err: any) {
     console.error('Verify code error:', err);
     res.status(400).json({
@@ -152,29 +238,17 @@ authRouter.post('/verify-code', async (req, res) => {
 });
 
 // Verify 2FA password
-authRouter.post('/verify-2fa', async (req, res) => {
+authRouter.post('/verify-2fa', requireUserToken, async (req, res) => {
+  const userId = (req as any).user.id;
   try {
-    const { password } = req.body;
-    if (!password) {
-      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Password is required' } });
+    const { authSessionId, password } = req.body;
+    if (!authSessionId || !password) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'authSessionId and password are required' } });
       return;
     }
 
-    await verify2FA(password);
-    const me = await getMe();
-
-    res.json({
-      success: true,
-      user: me
-        ? {
-            id: me.id?.toString(),
-            firstName: me.firstName,
-            lastName: me.lastName || '',
-            username: me.username || '',
-            phone: me.phone || '',
-          }
-        : null,
-    });
+    const result = await verify2FA(userId, String(authSessionId), String(password));
+    res.json(result);
   } catch (err: any) {
     console.error('2FA error:', err);
     res.status(400).json({
@@ -186,10 +260,38 @@ authRouter.post('/verify-2fa', async (req, res) => {
   }
 });
 
+// ── Protected User Session Status Routes ───────────────────────────────
+
+// Check authentication status
+authRouter.get('/status', requireUserToken, async (req, res) => {
+  const me = (req as any).user;
+  res.json({
+    authenticated: true,
+    user: {
+      id: me.id,
+      username: me.username,
+      email: me.email || '',
+      telegramConnected: !!me.session,
+      telegramUser: me.telegramId
+        ? {
+            id: me.telegramId,
+            firstName: me.telegramFirstName || '',
+            lastName: me.telegramLastName || '',
+            username: me.telegramUsername || '',
+            phone: me.telegramPhone || '',
+          }
+        : null,
+    },
+  });
+});
+
 // Logout
-authRouter.post('/logout', async (_req, res) => {
+authRouter.post('/logout', requireUserToken, async (req, res) => {
   try {
-    await logout();
+    const me = (req as any).user;
+    if (me) {
+      await logout(me.id);
+    }
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({

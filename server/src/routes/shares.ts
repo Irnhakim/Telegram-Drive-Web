@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import crypto from 'crypto';
-import { Api } from 'telegram';
+import { Api, TelegramClient } from 'telegram';
 import { createShareLink, getShareLink, deleteShareLink } from '../db.js';
-import { getTelegramClient, downloadFileToBuffer, downloadFileStream, getSavedMessages, checkAuth } from '../telegram.js';
+import { getClientForUser, downloadFileStream, getSavedMessages } from '../telegram.js';
 import { getMimeType, formatFileSize } from '../utils.js';
 
 export const sharesRouter = Router();
@@ -20,12 +20,9 @@ sharesRouter.use((req, res, next) => {
 });
 
 // Helper: resolve folder entity
-async function resolveEntity(folderId: string): Promise<Api.TypeEntityLike | null> {
-  const client = getTelegramClient();
-  if (!client) return null;
-
+async function resolveEntity(client: TelegramClient, folderId: string): Promise<Api.TypeEntityLike | null> {
   if (folderId === 'me' || !folderId) {
-    return await getSavedMessages() || 'me';
+    return await getSavedMessages(client) || 'me';
   }
 
   try {
@@ -37,8 +34,11 @@ async function resolveEntity(folderId: string): Promise<Api.TypeEntityLike | nul
   }
 }
 
-// Generate share link
+// Generate share link (AUTHENTICATED)
 sharesRouter.post('/generate', async (req, res) => {
+  const client = (req as any).telegramClient;
+  const userId = (req as any).user.id;
+
   try {
     const { messageId, folderId, fileName, fileSize, mimeType, password, expiresHours } = req.body;
 
@@ -50,7 +50,7 @@ sharesRouter.post('/generate', async (req, res) => {
     const shareId = crypto.randomBytes(6).toString('base64url');
     const expiresAt = expiresHours ? Math.floor(Date.now() / 1000) + (expiresHours * 3600) : undefined;
 
-    createShareLink({
+    createShareLink(userId, {
       id: shareId,
       messageId: parseInt(messageId, 10),
       folderId,
@@ -109,9 +109,6 @@ sharesRouter.get('/:shareId/download', async (req, res) => {
     const { shareId } = req.params;
     const password = (req.query.password as string) || '';
 
-    // Initialize and connect Telegram client if not already connected
-    await checkAuth();
-
     const share = getShareLink(shareId);
 
     if (!share) {
@@ -138,15 +135,16 @@ sharesRouter.get('/:shareId/download', async (req, res) => {
       return;
     }
 
-    const entity = await resolveEntity(share.folderId);
-    if (!entity) {
-      res.status(404).json({ error: { code: 'FOLDER_NOT_FOUND', message: 'Folder not found' } });
+    // Initialize and connect Telegram client of the link owner
+    const client = await getClientForUser(share.userId);
+    if (!client) {
+      res.status(500).json({ error: { code: 'NOT_CONNECTED', message: 'Owner Telegram session disconnected' } });
       return;
     }
 
-    const client = getTelegramClient();
-    if (!client) {
-      res.status(500).json({ error: { code: 'NOT_CONNECTED', message: 'Not connected' } });
+    const entity = await resolveEntity(client, share.folderId);
+    if (!entity) {
+      res.status(404).json({ error: { code: 'FOLDER_NOT_FOUND', message: 'Folder not found' } });
       return;
     }
 
@@ -164,7 +162,7 @@ sharesRouter.get('/:shareId/download', async (req, res) => {
     res.setHeader('Connection', 'keep-alive');
 
     // Stream chunks directly to client
-    const stream = downloadFileStream(msgs[0] as Api.Message, share.fileSize);
+    const stream = downloadFileStream(client, msgs[0] as Api.Message, share.fileSize);
     for await (const chunk of stream) {
       res.write(chunk);
       // Abort downloading if client closed the connection early
