@@ -5,7 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
-import { updateUserTelegramSession, getUserById, deleteUser } from './db.js';
+import { updateUserTelegramSession, getUserById, disconnectUserTelegram } from './db.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DATA_DIR = path.resolve(__dirname, '../../data');
@@ -287,7 +287,7 @@ export async function verify2FA(userId, authSessionId, password) {
     }
     throw new Error('2FA verification failed');
 }
-export async function logout(userId) {
+export async function disconnectTelegram(userId) {
     const client = activeClients.get(userId);
     try {
         if (client && client.connected) {
@@ -299,7 +299,21 @@ export async function logout(userId) {
     }
     finally {
         activeClients.delete(userId);
-        deleteUser(userId);
+        disconnectUserTelegram(userId);
+    }
+}
+export async function deactivateClient(userId) {
+    const client = activeClients.get(userId);
+    if (client) {
+        try {
+            await client.disconnect();
+        }
+        catch {
+            // ignore
+        }
+        finally {
+            activeClients.delete(userId);
+        }
     }
 }
 // Saved Messages entity (self)

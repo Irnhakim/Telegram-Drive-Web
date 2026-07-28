@@ -24,7 +24,8 @@ export declare function verify2FA(userId: string, authSessionId: string, passwor
     success: boolean;
     user?: any;
 }>;
-export declare function logout(userId: string): Promise<void>;
+export declare function disconnectTelegram(userId: string): Promise<void>;
+export declare function deactivateClient(userId: string): Promise<void>;
 export declare function getSavedMessages(client: TelegramClient): Promise<Api.User | null>;
 export declare function getUserChannels(client: TelegramClient): Promise<Api.Channel[]>;
 export declare function getMessages(client: TelegramClient, entity: Api.TypeEntityLike, options?: {

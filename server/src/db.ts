@@ -295,6 +295,24 @@ export function updateUserTelegramSession(
   saveDb();
 }
 
+export function disconnectUserTelegram(userId: string) {
+  const d = getDb();
+  d.run(
+    `UPDATE users SET
+       telegram_id = NULL,
+       telegram_username = NULL,
+       telegram_first_name = NULL,
+       telegram_last_name = NULL,
+       telegram_phone = NULL,
+       session = NULL,
+       api_id = NULL,
+       api_hash = NULL
+     WHERE id = ?`,
+    [userId]
+  );
+  saveDb();
+}
+
 export function updateUserWebToken(userId: string, token: string) {
   const d = getDb();
   d.run('UPDATE users SET token = ? WHERE id = ?', [token, userId]);

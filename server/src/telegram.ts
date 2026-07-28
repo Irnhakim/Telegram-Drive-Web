@@ -5,7 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
-import { updateUserTelegramSession, getUserById, deleteUser } from './db.js';
+import { updateUserTelegramSession, getUserById, deleteUser, disconnectUserTelegram } from './db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -372,7 +372,7 @@ export async function verify2FA(
   throw new Error('2FA verification failed');
 }
 
-export async function logout(userId: string): Promise<void> {
+export async function disconnectTelegram(userId: string): Promise<void> {
   const client = activeClients.get(userId);
   try {
     if (client && client.connected) {
@@ -382,7 +382,20 @@ export async function logout(userId: string): Promise<void> {
     // ignore
   } finally {
     activeClients.delete(userId);
-    deleteUser(userId);
+    disconnectUserTelegram(userId);
+  }
+}
+
+export async function deactivateClient(userId: string): Promise<void> {
+  const client = activeClients.get(userId);
+  if (client) {
+    try {
+      await client.disconnect();
+    } catch {
+      // ignore
+    } finally {
+      activeClients.delete(userId);
+    }
   }
 }
 

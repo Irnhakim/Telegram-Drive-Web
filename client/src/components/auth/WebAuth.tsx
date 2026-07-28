@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { User, Lock, Mail, ArrowRight, HardDrive, Eye, EyeOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { authApi } from '../../api/client';
@@ -16,6 +16,26 @@ export function WebAuth({ onAuthSuccess }: WebAuthProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [usernameAvailable, setUsernameAvailable] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle');
+
+  useEffect(() => {
+    if (mode !== 'register' || username.trim().length < 3) {
+      setUsernameAvailable('idle');
+      return;
+    }
+
+    setUsernameAvailable('checking');
+    const timer = setTimeout(async () => {
+      try {
+        const result = await authApi.checkUsername(username.trim());
+        setUsernameAvailable(result.available ? 'available' : 'taken');
+      } catch {
+        setUsernameAvailable('idle');
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [username, mode]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,6 +70,7 @@ export function WebAuth({ onAuthSuccess }: WebAuthProps) {
     setUsername('');
     setPassword('');
     setEmail('');
+    setUsernameAvailable('idle');
   };
 
   return (
@@ -73,7 +94,7 @@ export function WebAuth({ onAuthSuccess }: WebAuthProps) {
             transition={{ delay: 0.1, type: 'spring', stiffness: 200 }}
             style={{
               width: '68px', height: '68px', borderRadius: '18px',
-              background: 'linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%)',
+              background: 'linear-gradient(135deg, var(--accent-gradient) 0%, var(--accent-gradient) 100%)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               margin: '0 auto 16px',
               boxShadow: '0 8px 32px rgba(var(--accent-rgb), 0.3)',
@@ -111,21 +132,36 @@ export function WebAuth({ onAuthSuccess }: WebAuthProps) {
         {/* Form */}
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {/* Username */}
-          <div style={{ position: 'relative' }}>
-            <User size={18} style={{
-              position: 'absolute', left: '14px', top: '50%',
-              transform: 'translateY(-50%)', color: 'var(--text-muted)',
-            }} />
-            <input
-              className="input input-lg"
-              type="text"
-              required
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="Username"
-              autoFocus
-              style={{ paddingLeft: '42px' }}
-            />
+          <div>
+            <div style={{ position: 'relative' }}>
+              <User size={18} style={{
+                position: 'absolute', left: '14px', top: '50%',
+                transform: 'translateY(-50%)', color: 'var(--text-muted)',
+              }} />
+              <input
+                className="input input-lg"
+                type="text"
+                required
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Username"
+                autoFocus
+                style={{ paddingLeft: '42px' }}
+              />
+            </div>
+            {mode === 'register' && username.trim().length >= 3 && (
+              <div style={{ fontSize: '0.75rem', marginTop: '6px', paddingLeft: '4px' }}>
+                {usernameAvailable === 'checking' && (
+                  <span style={{ color: 'var(--text-muted)' }}>Checking availability...</span>
+                )}
+                {usernameAvailable === 'available' && (
+                  <span style={{ color: '#4ade80', fontWeight: 600 }}>✓ Username is available</span>
+                )}
+                {usernameAvailable === 'taken' && (
+                  <span style={{ color: '#f87171', fontWeight: 600 }}>✗ Username is already taken</span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Email (only in register) */}
@@ -186,7 +222,7 @@ export function WebAuth({ onAuthSuccess }: WebAuthProps) {
           <button
             type="submit"
             className="btn btn-primary btn-lg"
-            disabled={loading}
+            disabled={loading || (mode === 'register' && usernameAvailable !== 'available')}
             style={{ width: '100%', gap: '10px', marginTop: '8px' }}
           >
             {loading ? (

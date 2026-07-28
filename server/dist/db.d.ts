@@ -31,6 +31,7 @@ export declare function updateUserTelegramSession(userId: string, tgData: {
     apiId: number;
     apiHash: string;
 }): void;
+export declare function disconnectUserTelegram(userId: string): void;
 export declare function updateUserWebToken(userId: string, token: string): void;
 export declare function deleteUser(id: string): void;
 export declare function cacheFolders(userId: string, folders: Array<{

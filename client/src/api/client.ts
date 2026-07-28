@@ -53,6 +53,9 @@ async function request<T>(
 export const authApi = {
   status: () => request<{ authenticated: boolean; user: any }>('/api/auth/status'),
 
+  checkUsername: (username: string) =>
+    request<{ available: boolean }>(`/api/auth/check-username?username=${encodeURIComponent(username)}`),
+
   login: (username: string, password: string) =>
     request<{ success: boolean; token: string; user: any }>('/api/auth/login', {
       method: 'POST',

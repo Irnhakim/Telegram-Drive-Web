@@ -1,10 +1,25 @@
 import { Router } from 'express';
 import crypto from 'crypto';
-import { sendCode, verifyCode, verify2FA, logout, sendQRToken, checkQRStatus, } from '../telegram.js';
+import { sendCode, verifyCode, verify2FA, deactivateClient, disconnectTelegram, sendQRToken, checkQRStatus, } from '../telegram.js';
 import { registerUser, getUserByUsername, verifyPassword, updateUserWebToken, hashPassword, } from '../db.js';
 import { requireUserToken } from '../middleware/auth.js';
 export const authRouter = Router();
 // ── Public Web Account Authentication Routes ───────────────────────────
+// Check username availability
+authRouter.get('/check-username', (req, res) => {
+    try {
+        const username = (req.query.username || '').trim().toLowerCase();
+        if (!username || username.length < 3) {
+            res.json({ available: false });
+            return;
+        }
+        const existing = getUserByUsername(username);
+        res.json({ available: !existing });
+    }
+    catch (err) {
+        res.status(500).json({ error: { message: err.message } });
+    }
+});
 // TeleDrive Account Registration
 authRouter.post('/register', async (req, res) => {
     try {
@@ -243,13 +258,32 @@ authRouter.post('/logout', requireUserToken, async (req, res) => {
     try {
         const me = req.user;
         if (me) {
-            await logout(me.id);
+            // Deactivate client connection in memory
+            await deactivateClient(me.id);
+            // Invalidate token in database
+            const newToken = crypto.randomBytes(32).toString('hex');
+            updateUserWebToken(me.id, newToken);
         }
         res.json({ success: true });
     }
     catch (err) {
         res.status(500).json({
             error: { code: 'LOGOUT_FAILED', message: err.message },
+        });
+    }
+});
+// Disconnect Telegram Account
+authRouter.post('/telegram/disconnect', requireUserToken, async (req, res) => {
+    try {
+        const me = req.user;
+        if (me) {
+            await disconnectTelegram(me.id);
+        }
+        res.json({ success: true });
+    }
+    catch (err) {
+        res.status(500).json({
+            error: { code: 'DISCONNECT_FAILED', message: err.message },
         });
     }
 });
