@@ -2,12 +2,18 @@
 
 Telegram Drive Web is a self-hosted web-based port of [Telegram-Drive](https://github.com/caamer20/Telegram-Drive). It transforms your Telegram account into an unlimited, secure cloud storage drive, built with a **Node.js (Express + gram.js)** backend and a premium **React (Vite + TypeScript)** frontend.
 
+This project is fully **multi-user**, allowing multiple separate accounts to run isolated from each other.
+
 ## Features
 
 - **Unlimited Cloud Storage**: Harness the power of Telegram's infrastructure to store files of any size.
-- **Two-Layer Access Protection**:
-  - **Web Access Password**: Secures the web UI with a lock screen (essential when hosting on public domains).
-  - **Dynamic Telegram Auth**: Log in natively on the Web UI using either a **QR Code Scan** or **Phone Number & OTP**.
+- **Multi-User Account System**: 
+  - Register and login to your own TeleDrive web account using a username, password, and optional email (for recovery).
+  - Fully isolated databases, caches, file/folder listings, groups, and share links per user.
+- **Dynamic Telegram Auth**: Log in natively with your own Telegram account using either a **QR Code Scan** or **Phone Number & OTP** inside your TeleDrive dashboard.
+- **Smart Phone Number Formatting**: Input local Indonesian phone numbers (e.g. `081...`) and the backend will automatically format them to international format (`+6281...`) to prevent invalid credentials errors.
+- **Resend OTP Option**: Easy Kirim Ulang OTP with a 60-second countdown timer. Re-initializes a fresh Telegram connection to prevent expired sessions.
+- **Folder Upload Zipping**: Select and upload folders directly; they will be zipped automatically on the client-side before storing to conserve structure and transfer time.
 - **Interactive API Configuration**: Input your custom `TELEGRAM_API_ID` and `TELEGRAM_API_HASH` directly on the login screen. No need to hardcode credentials or rebuild containers.
 - **Flexible Theme Control**: Toggle between premium dark-mode (default glassmorphism) and light-mode themes dynamically.
 - **Dynamic File Sharing**: Generate secure public sharing links with:
@@ -34,11 +40,7 @@ Docker Compose is the easiest way to deploy the application on any platform (Lin
    mkdir telegram-drive-web
    cd telegram-drive-web
    ```
-2. Create a `.env` file in the directory to set up the Access Password for the Web UI:
-   ```env
-   ACCESS_PASSWORD=your_secure_web_ui_password
-   ```
-3. Create a `docker-compose.yml` file:
+2. Create a `docker-compose.yml` file:
    ```yaml
    services:
      telegram-drive:
@@ -47,8 +49,6 @@ Docker Compose is the easiest way to deploy the application on any platform (Lin
        restart: unless-stopped
        ports:
          - "3001:3001"
-       environment:
-         - ACCESS_PASSWORD=${ACCESS_PASSWORD}
        volumes:
          - telegram-drive-data:/app/data
 
@@ -56,11 +56,11 @@ Docker Compose is the easiest way to deploy the application on any platform (Lin
      telegram-drive-data:
        driver: local
    ```
-4. Start the container:
+3. Start the container:
    ```bash
    docker compose up -d
    ```
-5. Access the Web UI by navigating to `http://<your-server-ip>:3001`.
+4. Access the Web UI by navigating to `http://<your-server-ip>:3001`. Register your TeleDrive account first, then connect your Telegram!
 
 ---
 
@@ -84,7 +84,6 @@ Docker Compose is the easiest way to deploy the application on any platform (Lin
    ```
 2. Create a `.env` file in the root of the server directory:
    ```env
-   ACCESS_PASSWORD=your_secure_web_ui_password
    PORT=3001
    ```
 3. Start the production server:
@@ -116,4 +115,3 @@ To run client and server concurrently with hot reloading:
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](file:///d:/Programing/web/Telegram-Drive-WebServer/LICENSE) file for details.
-
