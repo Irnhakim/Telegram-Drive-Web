@@ -6,15 +6,17 @@ import { TopBar } from './TopBar';
 import { FileExplorer } from './FileExplorer';
 import { UploadProgress } from './UploadProgress';
 import { SharesManager } from './SharesManager';
+import { SettingsManager } from './SettingsManager';
 import type { UserInfo, TelegramFolder, TelegramFile, ViewMode, UploadItem } from '../../types';
 
 interface DashboardProps {
   user: UserInfo | null;
   onLogout: () => void;
   onAccessLogout?: () => void;
+  onUpdateUser?: (user: UserInfo) => void;
 }
 
-export function Dashboard({ user, onLogout, onAccessLogout }: DashboardProps) {
+export function Dashboard({ user, onLogout, onAccessLogout, onUpdateUser }: DashboardProps) {
   const [folders, setFolders] = useState<TelegramFolder[]>([]);
   const [currentFolderId, setCurrentFolderId] = useState('me');
   const [files, setFiles] = useState<TelegramFile[]>([]);
@@ -76,7 +78,7 @@ export function Dashboard({ user, onLogout, onAccessLogout }: DashboardProps) {
 
   // Load files when folder/search changes
   const loadFiles = useCallback(async () => {
-    if (currentFolderId === 'shares') {
+    if (currentFolderId === 'shares' || currentFolderId === 'settings') {
       return;
     }
     try {
@@ -352,6 +354,8 @@ export function Dashboard({ user, onLogout, onAccessLogout }: DashboardProps) {
 
   const currentFolder = currentFolderId === 'shares'
     ? { id: 'shares', name: 'Shared Links', type: 'custom' } as any
+    : currentFolderId === 'settings'
+    ? { id: 'settings', name: 'Settings', type: 'custom' } as any
     : folders.find((f) => f.id === currentFolderId);
 
   return (
@@ -402,6 +406,8 @@ export function Dashboard({ user, onLogout, onAccessLogout }: DashboardProps) {
 
         {currentFolderId === 'shares' ? (
           <SharesManager />
+        ) : currentFolderId === 'settings' ? (
+          <SettingsManager user={user} onUpdateUser={onUpdateUser || (() => {})} />
         ) : (
           <FileExplorer
             files={files}

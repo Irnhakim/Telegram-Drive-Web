@@ -101,6 +101,7 @@ function App() {
     <Dashboard
       user={user}
       onLogout={handleLogout}
+      onUpdateUser={setUser}
     />
   );
 }

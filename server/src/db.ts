@@ -314,6 +314,12 @@ export function updateUserPassword(userId: string, passwordHash: string) {
   saveDb();
 }
 
+export function updateUserEmail(userId: string, email: string | null) {
+  const d = getDb();
+  d.run('UPDATE users SET email = ? WHERE id = ?', [email ? email.toLowerCase() : null, userId]);
+  saveDb();
+}
+
 export function registerUser(username: string, passwordHash: string, email?: string): UserRow {
   const d = getDb();
   const id = crypto.randomBytes(16).toString('hex');

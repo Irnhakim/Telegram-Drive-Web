@@ -255,6 +255,11 @@ export function updateUserPassword(userId, passwordHash) {
     d.run('UPDATE users SET password_hash = ?, reset_token = NULL, reset_token_expires = NULL WHERE id = ?', [passwordHash, userId]);
     saveDb();
 }
+export function updateUserEmail(userId, email) {
+    const d = getDb();
+    d.run('UPDATE users SET email = ? WHERE id = ?', [email ? email.toLowerCase() : null, userId]);
+    saveDb();
+}
 export function registerUser(username, passwordHash, email) {
     const d = getDb();
     const id = crypto.randomBytes(16).toString('hex');

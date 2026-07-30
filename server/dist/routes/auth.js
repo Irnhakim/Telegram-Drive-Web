@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import crypto from 'crypto';
 import { sendCode, verifyCode, verify2FA, deactivateClient, disconnectTelegram, sendQRToken, checkQRStatus, } from '../telegram.js';
-import { registerUser, getUserByUsername, getUserByUsernameOrEmail, getUserByEmail, getUserByResetToken, updateUserResetToken, updateUserPassword, verifyPassword, updateUserWebToken, hashPassword, } from '../db.js';
+import { registerUser, getUserById, getUserByUsername, getUserByUsernameOrEmail, getUserByEmail, getUserByResetToken, updateUserResetToken, updateUserPassword, updateUserEmail, verifyPassword, updateUserWebToken, hashPassword, } from '../db.js';
 import { sendUsernameRecoveryEmail, sendPasswordResetEmail } from '../utils/mailer.js';
 import { requireUserToken } from '../middleware/auth.js';
 export const authRouter = Router();
@@ -359,6 +359,66 @@ authRouter.post('/telegram/disconnect', requireUserToken, async (req, res) => {
         res.status(500).json({
             error: { code: 'DISCONNECT_FAILED', message: err.message },
         });
+    }
+});
+// Update Profile Settings (Email and/or Password)
+authRouter.put('/profile', requireUserToken, async (req, res) => {
+    const userId = req.user.id;
+    const { email, currentPassword, newPassword } = req.body;
+    try {
+        const user = getUserById(userId);
+        if (!user) {
+            res.status(404).json({ error: { code: 'USER_NOT_FOUND', message: 'User not found' } });
+            return;
+        }
+        // Email validation & duplication check
+        if (email !== undefined) {
+            const emailTrim = email.trim();
+            if (emailTrim && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrim)) {
+                res.status(400).json({ error: { code: 'INVALID_EMAIL', message: 'Format email tidak valid' } });
+                return;
+            }
+            if (emailTrim) {
+                const existing = getUserByEmail(emailTrim);
+                if (existing && existing.id !== userId) {
+                    res.status(400).json({ error: { code: 'EMAIL_TAKEN', message: 'Email sudah digunakan oleh akun lain' } });
+                    return;
+                }
+            }
+        }
+        // Password validation & check current password
+        if (newPassword) {
+            if (!currentPassword) {
+                res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Password saat ini wajib diisi untuk mengubah password baru' } });
+                return;
+            }
+            if (!verifyPassword(currentPassword, user.passwordHash)) {
+                res.status(401).json({ error: { code: 'INVALID_PASSWORD', message: 'Password saat ini salah' } });
+                return;
+            }
+        }
+        // Save modifications
+        if (email !== undefined) {
+            updateUserEmail(userId, email.trim() || null);
+        }
+        if (newPassword) {
+            const hashed = hashPassword(newPassword);
+            updateUserPassword(userId, hashed);
+        }
+        res.json({
+            success: true,
+            message: 'Profil berhasil diperbarui!',
+            user: {
+                id: user.id,
+                username: user.username,
+                email: email !== undefined ? (email.trim() || '') : (user.email || ''),
+                telegramConnected: !!user.session,
+            }
+        });
+    }
+    catch (err) {
+        console.error('Update profile error:', err);
+        res.status(500).json({ error: { code: 'UPDATE_PROFILE_FAILED', message: err.message || 'Gagal memperbarui profil' } });
     }
 });
 //# sourceMappingURL=auth.js.map

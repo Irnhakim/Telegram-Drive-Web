@@ -433,6 +433,19 @@ export function Sidebar({
               <span style={{ fontSize: '0.8125rem', fontWeight: 600, flex: 1 }}>Shared Links</span>
             </div>
 
+            {/* Settings Tab */}
+            <div
+              className={`sidebar-item ${currentFolderId === 'settings' ? 'active' : ''}`}
+              onClick={() => onSelectFolder('settings')}
+              style={{
+                borderRadius: 'var(--radius-sm)', margin: '2px 8px', display: 'flex', alignItems: 'center', gap: '10px',
+                cursor: 'pointer'
+              }}
+            >
+              <Shield size={16} className="sidebar-icon" style={{ color: 'var(--text-accent)' }} />
+              <span style={{ fontSize: '0.8125rem', fontWeight: 600, flex: 1 }}>Settings</span>
+            </div>
+
             {filteredFolders.map((folder) => {
               const folderGroup = groups.find((g) => g.id === folder.groupId);
               return (

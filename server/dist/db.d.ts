@@ -27,6 +27,7 @@ export declare function getUserByEmail(email: string): UserRow | null;
 export declare function getUserByResetToken(token: string): UserRow | null;
 export declare function updateUserResetToken(userId: string, token: string | null, expires: number | null): void;
 export declare function updateUserPassword(userId: string, passwordHash: string): void;
+export declare function updateUserEmail(userId: string, email: string | null): void;
 export declare function registerUser(username: string, passwordHash: string, email?: string): UserRow;
 export declare function updateUserTelegramSession(userId: string, tgData: {
     telegramId: string;

@@ -115,6 +115,12 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify({ token, newPassword }),
     }),
+
+  updateProfile: (email?: string, currentPassword?: string, newPassword?: string) =>
+    request<{ success: boolean; message: string; user: any }>('/api/auth/profile', {
+      method: 'PUT',
+      body: JSON.stringify({ email, currentPassword, newPassword }),
+    }),
 };
 
 // ── Folders ───────────────────────────────────────────

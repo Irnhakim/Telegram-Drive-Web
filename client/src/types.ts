@@ -26,6 +26,8 @@ export interface UserInfo {
   lastName: string;
   username: string;
   phone: string;
+  email?: string;
+  telegramConnected?: boolean;
 }
 
 // ── API Response Types ───────────────────────────────
