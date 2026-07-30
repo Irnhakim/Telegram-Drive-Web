@@ -6,9 +6,10 @@ import type { UserInfo, AuthStep } from '../../types';
 
 interface LoginWizardProps {
   onLogin: (user: UserInfo) => void;
+  onLogout?: () => void;
 }
 
-export function LoginWizard({ onLogin }: LoginWizardProps) {
+export function LoginWizard({ onLogin, onLogout }: LoginWizardProps) {
   const [step, setStep] = useState<AuthStep>('phone');
   const [apiId, setApiId] = useState(() => localStorage.getItem('tg_api_id') || '');
   const [apiHash, setApiHash] = useState(() => localStorage.getItem('tg_api_hash') || '');
@@ -428,6 +429,21 @@ export function LoginWizard({ onLogin }: LoginWizardProps) {
             </motion.form>
           )}
         </AnimatePresence>
+
+        {onLogout && (
+          <div style={{ marginTop: '24px', textAlign: 'center', fontSize: '0.8125rem' }}>
+            <button
+              onClick={onLogout}
+              style={{
+                background: 'none', border: 'none', color: 'var(--text-muted)',
+                cursor: 'pointer', padding: 0, outline: 'none',
+                textDecoration: 'underline',
+              }}
+            >
+              Log out of web account
+            </button>
+          </div>
+        )}
       </motion.div>
     </div>
   );

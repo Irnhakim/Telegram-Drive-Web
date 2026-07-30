@@ -88,7 +88,7 @@ function App() {
 
   // Telegram Linking Wizard
   if (state === 'link-telegram') {
-    return <LoginWizard onLogin={handleTelegramLogin} />;
+    return <LoginWizard onLogin={handleTelegramLogin} onLogout={handleLogout} />;
   }
 
   // Public share landing page
