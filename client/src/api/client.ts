@@ -279,6 +279,14 @@ export const sharesApi = {
       body: JSON.stringify(params),
     }),
 
+  list: () =>
+    request<{ success: boolean; shares: any[] }>('/api/shares'),
+
+  revoke: (shareId: string) =>
+    request<{ success: boolean }>(`/api/shares/${shareId}`, {
+      method: 'DELETE',
+    }),
+
   getDetails: (shareId: string) =>
     request<{
       id: string;

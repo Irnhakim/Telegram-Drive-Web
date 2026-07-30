@@ -557,6 +557,27 @@ export function getShareLink(id: string) {
   };
 }
 
+export function getUserShareLinks(userId: string) {
+  const d = getDb();
+  const results = d.exec(
+    'SELECT id, user_id, message_id, folder_id, file_name, file_size, mime_type, password, expires_at, created_at FROM share_links WHERE user_id = ? ORDER BY created_at DESC',
+    [userId]
+  );
+  if (!results.length || !results[0].values.length) return [];
+  return results[0].values.map((row: any) => ({
+    id: row[0] as string,
+    userId: row[1] as string,
+    messageId: row[2] as number,
+    folderId: row[3] as string,
+    fileName: row[4] as string,
+    fileSize: row[5] as number,
+    mimeType: row[6] as string,
+    password: row[7] as string | null,
+    expiresAt: row[8] as number | null,
+    createdAt: row[9] as number,
+  }));
+}
+
 export function deleteShareLink(id: string) {
   const d = getDb();
   d.run('DELETE FROM share_links WHERE id = ?', [id]);

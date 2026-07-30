@@ -5,6 +5,7 @@ import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 import { FileExplorer } from './FileExplorer';
 import { UploadProgress } from './UploadProgress';
+import { SharesManager } from './SharesManager';
 import type { UserInfo, TelegramFolder, TelegramFile, ViewMode, UploadItem } from '../../types';
 
 interface DashboardProps {
@@ -346,7 +347,9 @@ export function Dashboard({ user, onLogout, onAccessLogout }: DashboardProps) {
     setUploads((prev) => prev.filter((u) => u.id !== uploadId));
   }, []);
 
-  const currentFolder = folders.find((f) => f.id === currentFolderId);
+  const currentFolder = currentFolderId === 'shares'
+    ? { id: 'shares', name: 'Shared Links', type: 'custom' } as any
+    : folders.find((f) => f.id === currentFolderId);
 
   return (
     <div className={`app-layout animate-fade-in ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
@@ -394,17 +397,21 @@ export function Dashboard({ user, onLogout, onAccessLogout }: DashboardProps) {
           sidebarCollapsed={sidebarCollapsed}
         />
 
-        <FileExplorer
-          files={files}
-          viewMode={viewMode}
-          currentFolderId={currentFolderId}
-          folders={folders}
-          onUpload={handleUpload}
-          onDelete={handleDelete}
-          onRename={handleRename}
-          selectedFileIds={selectedFileIds}
-          onToggleSelectFile={handleToggleSelectFile}
-        />
+        {currentFolderId === 'shares' ? (
+          <SharesManager />
+        ) : (
+          <FileExplorer
+            files={files}
+            viewMode={viewMode}
+            currentFolderId={currentFolderId}
+            folders={folders}
+            onUpload={handleUpload}
+            onDelete={handleDelete}
+            onRename={handleRename}
+            selectedFileIds={selectedFileIds}
+            onToggleSelectFile={handleToggleSelectFile}
+          />
+        )}
       </div>
 
       {uploads.length > 0 && (

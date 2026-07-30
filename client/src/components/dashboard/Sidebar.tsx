@@ -420,6 +420,19 @@ export function Sidebar({
           </div>
         ) : (
           <div style={{ position: 'relative' }}>
+            {/* Shared Links Tab */}
+            <div
+              className={`sidebar-item ${currentFolderId === 'shares' ? 'active' : ''}`}
+              onClick={() => onSelectFolder('shares')}
+              style={{
+                borderRadius: 'var(--radius-sm)', margin: '2px 8px', display: 'flex', alignItems: 'center', gap: '10px',
+                cursor: 'pointer'
+              }}
+            >
+              <Link2 size={16} className="sidebar-icon" style={{ color: 'var(--text-accent)' }} />
+              <span style={{ fontSize: '0.8125rem', fontWeight: 600, flex: 1 }}>Shared Links</span>
+            </div>
+
             {filteredFolders.map((folder) => {
               const folderGroup = groups.find((g) => g.id === folder.groupId);
               return (

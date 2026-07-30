@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import crypto from 'crypto';
 import { Api, TelegramClient } from 'telegram';
-import { createShareLink, getShareLink, deleteShareLink } from '../db.js';
+import { createShareLink, getShareLink, deleteShareLink, getUserShareLinks } from '../db.js';
 import { getClientForUser, downloadFileStream, getSavedMessages } from '../telegram.js';
 import { getMimeType, formatFileSize } from '../utils.js';
+import { requireUserToken } from '../middleware/auth.js';
 
 export const sharesRouter = Router();
 
@@ -69,6 +70,38 @@ sharesRouter.post('/generate', async (req, res) => {
   } catch (err: any) {
     console.error('Generate share link error:', err);
     res.status(500).json({ error: { code: 'SHARE_FAILED', message: err.message } });
+  }
+});
+
+// GET all active share links for current user (AUTHENTICATED)
+sharesRouter.get('/', requireUserToken, async (req, res) => {
+  const userId = (req as any).user.id;
+  try {
+    const list = getUserShareLinks(userId);
+    res.json({ success: true, shares: list });
+  } catch (err: any) {
+    res.status(500).json({ error: { code: 'FETCH_SHARES_FAILED', message: err.message } });
+  }
+});
+
+// DELETE/REVOKE share link (AUTHENTICATED)
+sharesRouter.delete('/:shareId', requireUserToken, async (req, res) => {
+  const userId = (req as any).user.id;
+  const shareId = req.params.shareId as string;
+  try {
+    const share = getShareLink(shareId);
+    if (!share) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Share link not found' } });
+      return;
+    }
+    if (share.userId !== userId) {
+      res.status(403).json({ error: { code: 'FORBIDDEN', message: 'You do not own this share link' } });
+      return;
+    }
+    deleteShareLink(shareId);
+    res.json({ success: true, message: 'Share link revoked successfully' });
+  } catch (err: any) {
+    res.status(500).json({ error: { code: 'REVOKE_SHARE_FAILED', message: err.message } });
   }
 });
 
