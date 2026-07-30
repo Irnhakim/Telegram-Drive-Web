@@ -285,8 +285,10 @@ export function LoginWizard({ onLogin }: LoginWizardProps) {
                       style={{ height: '36px', fontSize: '0.8125rem' }}
                     />
                   </div>
-                  <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                    Retrieve these keys from <a href="https://my.telegram.org" target="_blank" rel="noopener" style={{ color: 'var(--text-accent)' }}>my.telegram.org</a>. They remain locally saved in your browser and backend.
+                  <span style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                    Retrieve these keys from <a href="https://my.telegram.org" target="_blank" rel="noopener" style={{ color: 'var(--text-accent)', textDecoration: 'underline' }}>my.telegram.org</a>.
+                    <br />
+                    Watch the tutorial steps here: <a href="https://www.youtube.com/watch?v=8naENmP3rg4" target="_blank" rel="noopener" style={{ color: 'var(--text-accent)', textDecoration: 'underline', fontWeight: 600 }}>YouTube Video Tutorial</a>
                   </span>
                 </motion.div>
               )}
@@ -337,7 +339,11 @@ export function LoginWizard({ onLogin }: LoginWizardProps) {
               <button
                 type="button"
                 className="btn btn-secondary btn-lg"
-                onClick={() => setStep('phone')}
+                onClick={() => {
+                  if (validateConfig()) {
+                    setStep('phone');
+                  }
+                }}
                 style={{ width: '100%', gap: '12px' }}
               >
                 <Phone size={20} /> Login with Phone Number
