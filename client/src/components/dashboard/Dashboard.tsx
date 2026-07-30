@@ -20,6 +20,7 @@ export function Dashboard({ user, onLogout, onAccessLogout, onUpdateUser }: Dash
   const [folders, setFolders] = useState<TelegramFolder[]>([]);
   const [currentFolderId, setCurrentFolderId] = useState('me');
   const [files, setFiles] = useState<TelegramFile[]>([]);
+
   const [loadingFolders, setLoadingFolders] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [searchQuery, setSearchQuery] = useState('');

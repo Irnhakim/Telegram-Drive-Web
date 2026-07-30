@@ -5,7 +5,7 @@ import {
   Shield, ChevronLeft, Eye as EyeIcon, RefreshCw, FolderSymlink, Check, X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { foldersApi, storageApi, groupsApi } from '../../api/client';
+import { foldersApi, groupsApi } from '../../api/client';
 import type { TelegramFolder } from '../../types';
 
 interface SidebarProps {
@@ -62,8 +62,6 @@ export function Sidebar({
   const [newGroupName, setNewGroupName] = useState('');
   const [selectedColor, setSelectedColor] = useState('#3b82f6');
 
-  // Storage usage stats states
-  const [usageStats, setUsageStats] = useState({ used: '160.83 MB', limit: '250 GB', percent: 0.1 });
   const [sidebarFolders, setSidebarFolders] = useState<TelegramFolder[]>(folders);
 
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -86,36 +84,6 @@ export function Sidebar({
   useEffect(() => {
     loadGroups();
   }, []);
-
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const res = await storageApi.stats();
-        if (res) {
-          const usedBytes = res.totalSize || 0;
-          const limitBytes = 250 * 1024 * 1024 * 1024;
-          const percent = Math.min((usedBytes / limitBytes) * 100, 100);
-          
-          const formatBytes = (bytes: number) => {
-            if (bytes === 0) return '0 B';
-            const k = 1024;
-            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-          };
-          
-          setUsageStats({
-            used: formatBytes(usedBytes),
-            limit: '250 GB',
-            percent,
-          });
-        }
-      } catch {
-        // Fallback
-      }
-    };
-    fetchStats();
-  }, [folders]);
 
   // Close folder menu on click outside
   useEffect(() => {
@@ -650,19 +618,6 @@ export function Sidebar({
           </button>
         </div>
 
-        {/* Storage progress bar */}
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.6875rem', color: 'var(--text-muted)', marginBottom: '6px' }}>
-            <span>Used Today:</span>
-          </div>
-          <div style={{ height: '6px', background: 'rgba(255,255,255,0.05)', borderRadius: '3px', overflow: 'hidden', marginBottom: '4px' }}>
-            <div style={{ height: '100%', background: 'var(--accent-gradient)', width: `${usageStats.percent}%`, borderRadius: '3px' }} />
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.6875rem', color: 'var(--text-muted)' }}>
-            <span>{usageStats.used}</span>
-            <span>{usageStats.limit}</span>
-          </div>
-        </div>
 
       </div>
     </div>
