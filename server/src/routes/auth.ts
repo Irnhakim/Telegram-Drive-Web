@@ -149,7 +149,7 @@ authRouter.post('/forgot-username', async (req, res) => {
       return;
     }
     await sendUsernameRecoveryEmail(user.email!, user.username);
-    res.json({ success: true, message: 'Berhasil: Username telah dikirim ke email Anda!' });
+    res.json({ success: true, message: 'Berhasil: Username telah dikirim ke email Anda! (Harap periksa juga folder SPAM/Promosi jika belum menerimanya)' });
   } catch (err: any) {
     console.error('Forgot username error:', err);
     res.status(500).json({ error: { code: 'RECOVERY_FAILED', message: 'Gagal mengirim email recovery: ' + err.message } });
@@ -182,7 +182,7 @@ authRouter.post('/forgot-password', async (req, res) => {
     const resetLink = `${req.protocol}://${req.get('host')}/?reset_token=${resetToken}`;
     await sendPasswordResetEmail(user.email, resetLink);
     
-    res.json({ success: true, message: 'Berhasil: Link reset password telah dikirim ke email Anda!' });
+    res.json({ success: true, message: 'Berhasil: Link reset password telah dikirim ke email Anda! (Harap periksa juga folder SPAM/Promosi jika belum menerimanya)' });
   } catch (err: any) {
     console.error('Forgot password error:', err);
     res.status(500).json({ error: { code: 'RESET_REQUEST_FAILED', message: 'Gagal mengirim email reset: ' + err.message } });

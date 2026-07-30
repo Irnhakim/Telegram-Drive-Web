@@ -120,7 +120,7 @@ authRouter.post('/forgot-username', async (req, res) => {
             return;
         }
         await sendUsernameRecoveryEmail(user.email, user.username);
-        res.json({ success: true, message: 'Berhasil: Username telah dikirim ke email Anda!' });
+        res.json({ success: true, message: 'Berhasil: Username telah dikirim ke email Anda! (Harap periksa juga folder SPAM/Promosi jika belum menerimanya)' });
     }
     catch (err) {
         console.error('Forgot username error:', err);
@@ -150,7 +150,7 @@ authRouter.post('/forgot-password', async (req, res) => {
         // Extract client host to form absolute reset link
         const resetLink = `${req.protocol}://${req.get('host')}/?reset_token=${resetToken}`;
         await sendPasswordResetEmail(user.email, resetLink);
-        res.json({ success: true, message: 'Berhasil: Link reset password telah dikirim ke email Anda!' });
+        res.json({ success: true, message: 'Berhasil: Link reset password telah dikirim ke email Anda! (Harap periksa juga folder SPAM/Promosi jika belum menerimanya)' });
     }
     catch (err) {
         console.error('Forgot password error:', err);
