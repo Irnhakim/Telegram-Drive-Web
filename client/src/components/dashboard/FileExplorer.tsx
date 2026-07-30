@@ -298,9 +298,9 @@ export function FileExplorer({
             marginBottom: '4px',
           }}>
             <div style={{ width: '32px' }} />
-            <div style={{ flex: 1 }}>Name</div>
-            <div style={{ width: '100px', textAlign: 'right' }}>Size</div>
-            <div style={{ width: '140px', textAlign: 'right' }}>Date</div>
+            <div style={{ flex: '1 1 200px' }}>Name</div>
+            <div style={{ width: '140px', textAlign: 'left' }}>Date modified</div>
+            <div style={{ width: '100px', textAlign: 'right' }}>File size</div>
             <div style={{ width: '60px' }} />
           </div>
           {sortedFiles.map((file, index) => (

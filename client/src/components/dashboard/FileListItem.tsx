@@ -53,10 +53,17 @@ export function FileListItem({ file, onDownload, onContextMenu, isSelected, onTo
       <FileTypeIcon mimeType={file.mimeType} category={file.category} size={18} />
 
       <div style={{
-        flex: 1, overflow: 'hidden', textOverflow: 'ellipsis',
-        whiteSpace: 'nowrap', fontSize: '0.875rem',
+        flex: '1 1 200px', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap', fontSize: '0.875rem', color: 'var(--text-primary)',
       }}>
         {file.name}
+      </div>
+
+      <div style={{
+        width: '140px', textAlign: 'left',
+        fontSize: '0.8125rem', color: 'var(--text-muted)',
+      }}>
+        {formatDate(file.createdAt)}
       </div>
 
       <div style={{
@@ -64,13 +71,6 @@ export function FileListItem({ file, onDownload, onContextMenu, isSelected, onTo
         fontSize: '0.8125rem', color: 'var(--text-muted)',
       }}>
         {file.sizeStr}
-      </div>
-
-      <div style={{
-        width: '140px', textAlign: 'right',
-        fontSize: '0.8125rem', color: 'var(--text-muted)',
-      }}>
-        {formatDate(file.createdAt)}
       </div>
 
       <div style={{ width: '60px', display: 'flex', justifyContent: 'flex-end', gap: '4px' }}>
