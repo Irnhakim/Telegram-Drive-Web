@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import crypto from 'crypto';
-import { createShareLink, getShareLink, deleteShareLink, getUserShareLinks } from '../db.js';
+import { createShareLink, getShareLink, deleteShareLink, getUserShareLinks, incrementShareLinkDownloads } from '../db.js';
 import { getClientForUser, downloadFileStream, getSavedMessages } from '../telegram.js';
 import { getMimeType, formatFileSize } from '../utils.js';
 import { requireUserToken } from '../middleware/auth.js';
@@ -149,6 +149,8 @@ sharesRouter.get('/:shareId/download', async (req, res) => {
             res.json({ success: true, message: 'Password verified' });
             return;
         }
+        // Increment downloads counter
+        incrementShareLinkDownloads(shareId);
         // Initialize and connect Telegram client of the link owner
         const client = await getClientForUser(share.userId);
         if (!client) {

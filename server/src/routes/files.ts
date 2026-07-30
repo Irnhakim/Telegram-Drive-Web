@@ -37,6 +37,10 @@ async function resolveEntity(client: TelegramClient, folderId: string): Promise<
     return await getSavedMessages(client) || 'me';
   }
 
+  if (!/^-?\d+$/.test(folderId)) {
+    return null;
+  }
+
   try {
     const entity = await client.getEntity(BigInt(folderId) as any);
     return entity;

@@ -100,6 +100,7 @@ export declare function getShareLink(id: string): {
     mimeType: string;
     password: string | null;
     expiresAt: number | null;
+    downloads: number;
 } | null;
 export declare function getUserShareLinks(userId: string): {
     id: string;
@@ -112,7 +113,9 @@ export declare function getUserShareLinks(userId: string): {
     password: string | null;
     expiresAt: number | null;
     createdAt: number;
+    downloads: number;
 }[];
+export declare function incrementShareLinkDownloads(id: string): void;
 export declare function deleteShareLink(id: string): void;
 export declare function createGroup(userId: string, id: string, name: string, color: string): void;
 export declare function getGroups(userId: string): {

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link2, Trash2, Copy, ExternalLink, Shield, Calendar, Search, RefreshCw, AlertCircle } from 'lucide-react';
+import { Link2, Trash2, Copy, ExternalLink, Shield, Calendar, Search, RefreshCw, AlertCircle, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { sharesApi } from '../../api/client';
 
@@ -14,6 +14,7 @@ interface ShareLink {
   password?: string | null;
   expiresAt?: number | null;
   createdAt: number;
+  downloads: number;
 }
 
 export function SharesManager() {
@@ -243,6 +244,16 @@ export function SharesManager() {
                           {isExpired ? 'Expired' : `Expires: ${formatDate(share.expiresAt)}`}
                         </span>
                       )}
+
+                      {/* Downloads Count Badge */}
+                      <span style={{
+                        display: 'flex', alignItems: 'center', gap: '4px',
+                        fontSize: '0.6875rem', fontWeight: 600, padding: '4px 10px',
+                        borderRadius: '20px', background: 'rgba(59, 130, 246, 0.1)',
+                        border: '1px solid rgba(59, 130, 246, 0.2)', color: '#60a5fa'
+                      }}>
+                        <Download size={12} /> {share.downloads || 0} {share.downloads === 1 ? 'download' : 'downloads'}
+                      </span>
                     </div>
 
                     {/* Action buttons */}

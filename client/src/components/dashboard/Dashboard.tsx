@@ -76,6 +76,9 @@ export function Dashboard({ user, onLogout, onAccessLogout }: DashboardProps) {
 
   // Load files when folder/search changes
   const loadFiles = useCallback(async () => {
+    if (currentFolderId === 'shares') {
+      return;
+    }
     try {
       const result = await filesApi.list({
         folderId: currentFolderId,

@@ -134,9 +134,21 @@ export async function initDatabase() {
       mime_type TEXT,
       password TEXT,
       expires_at INTEGER,
-      created_at INTEGER
+      created_at INTEGER,
+      downloads INTEGER DEFAULT 0
     )
   `);
+    // Check if downloads column needs to be added (for existing share_links tables)
+    const hasShareLinksTable = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='share_links'").length > 0;
+    if (hasShareLinksTable) {
+        const tableInfo = db.exec("PRAGMA table_info(share_links)");
+        if (tableInfo.length && tableInfo[0].values) {
+            const columns = tableInfo[0].values.map(v => v[1]);
+            if (!columns.includes('downloads')) {
+                db.run('ALTER TABLE share_links ADD COLUMN downloads INTEGER DEFAULT 0');
+            }
+        }
+    }
     saveDb();
 }
 function saveDb() {
@@ -395,7 +407,7 @@ export function createShareLink(userId, params) {
 }
 export function getShareLink(id) {
     const d = getDb();
-    const results = d.exec('SELECT id, user_id, message_id, folder_id, file_name, file_size, mime_type, password, expires_at FROM share_links WHERE id = ?', [id]);
+    const results = d.exec('SELECT id, user_id, message_id, folder_id, file_name, file_size, mime_type, password, expires_at, downloads FROM share_links WHERE id = ?', [id]);
     if (!results.length || !results[0].values.length)
         return null;
     const row = results[0].values[0];
@@ -409,11 +421,12 @@ export function getShareLink(id) {
         mimeType: row[6],
         password: row[7],
         expiresAt: row[8],
+        downloads: row[9] || 0,
     };
 }
 export function getUserShareLinks(userId) {
     const d = getDb();
-    const results = d.exec('SELECT id, user_id, message_id, folder_id, file_name, file_size, mime_type, password, expires_at, created_at FROM share_links WHERE user_id = ? ORDER BY created_at DESC', [userId]);
+    const results = d.exec('SELECT id, user_id, message_id, folder_id, file_name, file_size, mime_type, password, expires_at, created_at, downloads FROM share_links WHERE user_id = ? ORDER BY created_at DESC', [userId]);
     if (!results.length || !results[0].values.length)
         return [];
     return results[0].values.map((row) => ({
@@ -427,7 +440,13 @@ export function getUserShareLinks(userId) {
         password: row[7],
         expiresAt: row[8],
         createdAt: row[9],
+        downloads: row[10] || 0,
     }));
+}
+export function incrementShareLinkDownloads(id) {
+    const d = getDb();
+    d.run('UPDATE share_links SET downloads = downloads + 1 WHERE id = ?', [id]);
+    saveDb();
 }
 export function deleteShareLink(id) {
     const d = getDb();

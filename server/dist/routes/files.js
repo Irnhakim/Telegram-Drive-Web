@@ -21,6 +21,9 @@ async function resolveEntity(client, folderId) {
     if (folderId === 'me' || !folderId) {
         return await getSavedMessages(client) || 'me';
     }
+    if (!/^-?\d+$/.test(folderId)) {
+        return null;
+    }
     try {
         const entity = await client.getEntity(BigInt(folderId));
         return entity;
