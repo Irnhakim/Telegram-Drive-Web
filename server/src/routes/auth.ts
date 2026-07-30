@@ -12,10 +12,16 @@ import {
 import {
   registerUser,
   getUserByUsername,
+  getUserByUsernameOrEmail,
+  getUserByEmail,
+  getUserByResetToken,
+  updateUserResetToken,
+  updateUserPassword,
   verifyPassword,
   updateUserWebToken,
   hashPassword,
 } from '../db.js';
+import { sendUsernameRecoveryEmail, sendPasswordResetEmail } from '../utils/mailer.js';
 import { requireUserToken } from '../middleware/auth.js';
 
 export const authRouter = Router();
@@ -98,7 +104,7 @@ authRouter.post('/login', async (req, res) => {
       return;
     }
 
-    const user = getUserByUsername(username);
+    const user = getUserByUsernameOrEmail(username);
     if (!user || !verifyPassword(password, user.passwordHash)) {
       res.status(401).json({
         error: { code: 'INVALID_CREDENTIALS', message: 'Invalid username or password' },
@@ -126,6 +132,83 @@ authRouter.post('/login', async (req, res) => {
     res.status(500).json({
       error: { code: 'LOGIN_FAILED', message: err.message || 'Failed to login' },
     });
+  }
+});
+
+// Forgot Username Route
+authRouter.post('/forgot-username', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Email wajib diisi' } });
+      return;
+    }
+    const user = getUserByEmail(email);
+    if (!user) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Gagal: Email tidak terdaftar di sistem' } });
+      return;
+    }
+    await sendUsernameRecoveryEmail(user.email!, user.username);
+    res.json({ success: true, message: 'Berhasil: Username telah dikirim ke email Anda!' });
+  } catch (err: any) {
+    console.error('Forgot username error:', err);
+    res.status(500).json({ error: { code: 'RECOVERY_FAILED', message: 'Gagal mengirim email recovery: ' + err.message } });
+  }
+});
+
+// Forgot Password Route
+authRouter.post('/forgot-password', async (req, res) => {
+  try {
+    const { identifier } = req.body;
+    if (!identifier) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Username atau Email wajib diisi' } });
+      return;
+    }
+    const user = getUserByUsernameOrEmail(identifier);
+    if (!user) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Gagal: Akun tidak ditemukan' } });
+      return;
+    }
+    if (!user.email) {
+      res.status(400).json({ error: { code: 'NO_EMAIL', message: 'Gagal: Akun ini tidak memiliki email pemulihan yang terdaftar' } });
+      return;
+    }
+
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenExpires = Math.floor(Date.now() / 1000) + 3600; // 1 hour expiry
+    updateUserResetToken(user.id, resetToken, resetTokenExpires);
+
+    // Extract client host to form absolute reset link
+    const resetLink = `${req.protocol}://${req.get('host')}/?reset_token=${resetToken}`;
+    await sendPasswordResetEmail(user.email, resetLink);
+    
+    res.json({ success: true, message: 'Berhasil: Link reset password telah dikirim ke email Anda!' });
+  } catch (err: any) {
+    console.error('Forgot password error:', err);
+    res.status(500).json({ error: { code: 'RESET_REQUEST_FAILED', message: 'Gagal mengirim email reset: ' + err.message } });
+  }
+});
+
+// Reset Password Route
+authRouter.post('/reset-password', async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+    if (!token || !newPassword) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Token and new password are required' } });
+      return;
+    }
+    const user = getUserByResetToken(token);
+    if (!user || !user.resetTokenExpires || Math.floor(Date.now() / 1000) > user.resetTokenExpires) {
+      res.status(400).json({ error: { code: 'INVALID_TOKEN', message: 'Token reset tidak valid atau telah kedaluwarsa' } });
+      return;
+    }
+
+    const hashed = hashPassword(newPassword);
+    updateUserPassword(user.id, hashed);
+    res.json({ success: true, message: 'Password berhasil diubah. Silakan login kembali.' });
+  } catch (err: any) {
+    console.error('Reset password error:', err);
+    res.status(500).json({ error: { code: 'RESET_FAILED', message: err.message || 'Failed to reset password' } });
   }
 });
 

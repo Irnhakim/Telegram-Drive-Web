@@ -97,6 +97,24 @@ export const authApi = {
 
   logout: () =>
     request<{ success: boolean }>('/api/auth/logout', { method: 'POST' }),
+
+  forgotUsername: (email: string) =>
+    request<{ success: boolean; message: string }>('/api/auth/forgot-username', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+
+  forgotPassword: (identifier: string) =>
+    request<{ success: boolean; message: string }>('/api/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ identifier }),
+    }),
+
+  resetPassword: (token: string, newPassword: string) =>
+    request<{ success: boolean; message: string }>('/api/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ token, newPassword }),
+    }),
 };
 
 // ── Folders ───────────────────────────────────────────

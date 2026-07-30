@@ -16,10 +16,17 @@ export interface UserRow {
     apiHash: string | null;
     token: string;
     createdAt: number;
+    resetToken?: string | null;
+    resetTokenExpires?: number | null;
 }
 export declare function getUserByToken(token: string): UserRow | null;
 export declare function getUserById(id: string): UserRow | null;
 export declare function getUserByUsername(username: string): UserRow | null;
+export declare function getUserByUsernameOrEmail(identifier: string): UserRow | null;
+export declare function getUserByEmail(email: string): UserRow | null;
+export declare function getUserByResetToken(token: string): UserRow | null;
+export declare function updateUserResetToken(userId: string, token: string | null, expires: number | null): void;
+export declare function updateUserPassword(userId: string, passwordHash: string): void;
 export declare function registerUser(username: string, passwordHash: string, email?: string): UserRow;
 export declare function updateUserTelegramSession(userId: string, tgData: {
     telegramId: string;

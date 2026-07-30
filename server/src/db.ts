@@ -80,9 +80,25 @@ export async function initDatabase(): Promise<void> {
       api_id INTEGER,
       api_hash TEXT,
       token TEXT NOT NULL,
-      created_at INTEGER
+      created_at INTEGER,
+      reset_token TEXT,
+      reset_token_expires INTEGER
     )
   `);
+
+  // Check if reset_token columns need to be added (for existing users tables)
+  if (hasUsersTable) {
+    const tableInfo = db.exec("PRAGMA table_info(users)");
+    if (tableInfo.length && tableInfo[0].values) {
+      const columns = tableInfo[0].values.map(v => v[1]);
+      if (!columns.includes('reset_token')) {
+        db.run('ALTER TABLE users ADD COLUMN reset_token TEXT');
+      }
+      if (!columns.includes('reset_token_expires')) {
+        db.run('ALTER TABLE users ADD COLUMN reset_token_expires INTEGER');
+      }
+    }
+  }
 
   // 2. Folder Cache
   db.run(`
@@ -201,6 +217,8 @@ export interface UserRow {
   apiHash: string | null;
   token: string;
   createdAt: number;
+  resetToken?: string | null;
+  resetTokenExpires?: number | null;
 }
 
 function mapUserRow(row: any[]): UserRow {
@@ -219,13 +237,15 @@ function mapUserRow(row: any[]): UserRow {
     apiHash: row[11] as string | null,
     token: row[12] as string,
     createdAt: row[13] as number,
+    resetToken: row[14] as string | null,
+    resetTokenExpires: row[15] as number | null,
   };
 }
 
 export function getUserByToken(token: string): UserRow | null {
   const d = getDb();
   const results = d.exec(
-    'SELECT id, username, password_hash, email, telegram_id, telegram_username, telegram_first_name, telegram_last_name, telegram_phone, session, api_id, api_hash, token, created_at FROM users WHERE token = ?',
+    'SELECT id, username, password_hash, email, telegram_id, telegram_username, telegram_first_name, telegram_last_name, telegram_phone, session, api_id, api_hash, token, created_at, reset_token, reset_token_expires FROM users WHERE token = ?',
     [token]
   );
   if (!results.length || !results[0].values.length) return null;
@@ -235,7 +255,7 @@ export function getUserByToken(token: string): UserRow | null {
 export function getUserById(id: string): UserRow | null {
   const d = getDb();
   const results = d.exec(
-    'SELECT id, username, password_hash, email, telegram_id, telegram_username, telegram_first_name, telegram_last_name, telegram_phone, session, api_id, api_hash, token, created_at FROM users WHERE id = ?',
+    'SELECT id, username, password_hash, email, telegram_id, telegram_username, telegram_first_name, telegram_last_name, telegram_phone, session, api_id, api_hash, token, created_at, reset_token, reset_token_expires FROM users WHERE id = ?',
     [id]
   );
   if (!results.length || !results[0].values.length) return null;
@@ -245,11 +265,53 @@ export function getUserById(id: string): UserRow | null {
 export function getUserByUsername(username: string): UserRow | null {
   const d = getDb();
   const results = d.exec(
-    'SELECT id, username, password_hash, email, telegram_id, telegram_username, telegram_first_name, telegram_last_name, telegram_phone, session, api_id, api_hash, token, created_at FROM users WHERE username = ?',
+    'SELECT id, username, password_hash, email, telegram_id, telegram_username, telegram_first_name, telegram_last_name, telegram_phone, session, api_id, api_hash, token, created_at, reset_token, reset_token_expires FROM users WHERE username = ?',
     [username.toLowerCase()]
   );
   if (!results.length || !results[0].values.length) return null;
   return mapUserRow(results[0].values[0]);
+}
+
+export function getUserByUsernameOrEmail(identifier: string): UserRow | null {
+  const d = getDb();
+  const results = d.exec(
+    'SELECT id, username, password_hash, email, telegram_id, telegram_username, telegram_first_name, telegram_last_name, telegram_phone, session, api_id, api_hash, token, created_at, reset_token, reset_token_expires FROM users WHERE username = ? OR email = ?',
+    [identifier.toLowerCase(), identifier.toLowerCase()]
+  );
+  if (!results.length || !results[0].values.length) return null;
+  return mapUserRow(results[0].values[0]);
+}
+
+export function getUserByEmail(email: string): UserRow | null {
+  const d = getDb();
+  const results = d.exec(
+    'SELECT id, username, password_hash, email, telegram_id, telegram_username, telegram_first_name, telegram_last_name, telegram_phone, session, api_id, api_hash, token, created_at, reset_token, reset_token_expires FROM users WHERE email = ?',
+    [email.toLowerCase()]
+  );
+  if (!results.length || !results[0].values.length) return null;
+  return mapUserRow(results[0].values[0]);
+}
+
+export function getUserByResetToken(token: string): UserRow | null {
+  const d = getDb();
+  const results = d.exec(
+    'SELECT id, username, password_hash, email, telegram_id, telegram_username, telegram_first_name, telegram_last_name, telegram_phone, session, api_id, api_hash, token, created_at, reset_token, reset_token_expires FROM users WHERE reset_token = ?',
+    [token]
+  );
+  if (!results.length || !results[0].values.length) return null;
+  return mapUserRow(results[0].values[0]);
+}
+
+export function updateUserResetToken(userId: string, token: string | null, expires: number | null) {
+  const d = getDb();
+  d.run('UPDATE users SET reset_token = ?, reset_token_expires = ? WHERE id = ?', [token, expires, userId]);
+  saveDb();
+}
+
+export function updateUserPassword(userId: string, passwordHash: string) {
+  const d = getDb();
+  d.run('UPDATE users SET password_hash = ?, reset_token = NULL, reset_token_expires = NULL WHERE id = ?', [passwordHash, userId]);
+  saveDb();
 }
 
 export function registerUser(username: string, passwordHash: string, email?: string): UserRow {
